@@ -1,4 +1,4 @@
-// src/App.tsx
+
 import { useState } from "react";
 import {
   SECTIONS,
@@ -8,8 +8,7 @@ import {
 import Logo from "./assets/logo.png";
 import { SectionCard } from "./components/SectionCard";
 import {
-  saveEvaluation,
-  saveEvaluationToN8N,
+  submitEvaluation,
   type Rubric,
   type EvaluationPayload,
 } from "./services/evaluationService";
@@ -80,15 +79,16 @@ function App() {
     const payload = buildPayload();
 
     try {
-      // ส่งไปทั้ง n8n + Supabase
-      await Promise.all([
-        saveEvaluationToN8N(payload),
-        saveEvaluation(payload),
-      ]);
+      // ส่งแค่ Supabase อย่างเดียว
+      await submitEvaluation(payload);
 
       console.log("✅ Saved payload:", payload);
       alert("บันทึกข้อมูลสำเร็จ! 🎉");
-      // TODO: ถ้าอยากเคลียร์ฟอร์มให้ reset state ตรงนี้
+      // ถ้าอยากรีเซ็ตฟอร์ม ก็เคลียร์ state ตรงนี้ได้
+      // setOrderNumber("");
+      // setSubjectName("");
+      // setAnswers({});
+      // setComment("");
     } catch (error) {
       console.error("❌ Error while saving:", error);
       alert("เกิดข้อผิดพลาดขณะบันทึกข้อมูล ❌");

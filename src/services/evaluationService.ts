@@ -1,47 +1,67 @@
+// src/services/evaluationService.ts
 import { supabase } from "../lib/supabaseClient";
 
-// ---------- Types ----------
-export type Rubric = Record<string, Record<string, number | null>>;
-
-export type EvaluationPayload = {
-  order_number: string;
-  subject_name: string;
-  overall_suggestion: string;
-  rubric: Rubric;
+// รูปแบบ rubric ที่ส่งมาจากฟอร์ม
+export type RubricPayload = {
+  [sectionId: string]: {
+    [questionId: string]: number | null;
+  };
 };
 
-// ---------- n8n (Forward to Supabase Edge Function) ----------
-export async function saveEvaluationToN8N(payload: EvaluationPayload) {
-  const { data, error } = await supabase.functions.invoke(
-    "forward-to-n8n",
-    { body: payload }
-  );
-
-  if (error) {
-    console.error("❌ Error forwarding to n8n:", error);
-    throw error;
-  }
-
-  return data;
+export interface EvaluationPayload {
+  order_number?: string | null;
+  subject_name: string;
+  overall_suggestion?: string | null;
+  rubric: RubricPayload;
 }
 
-// ---------- Supabase DB ----------
-export async function saveEvaluation(payload: EvaluationPayload) {
-  const { data, error } = await supabase
-    .from("evaluations")
-    .insert({
-      order_number: payload.order_number,
-      subject_name: payload.subject_name,
-      overall_suggestion: payload.overall_suggestion,
-      rubric: payload.rubric,
-    })
-    .select()
-    .single();
+export type RubricValue = number | null;
 
-  if (error) {
-    console.error("❌ Supabase insert error:", error);
-    throw error;
+export type Rubric = {
+  [sectionId: string]: {
+    [questionId: string]: RubricValue;
+  };
+};
+
+
+/**
+ * บันทึกผลประเมินลงตาราง evaluations
+ */
+export async function submitEvaluation(payload: EvaluationPayload) {
+  try {
+    const { data, error } = await supabase
+      .from("evaluations")
+      .insert([
+        {
+          order_number: payload.order_number ?? null,
+          subject_name: payload.subject_name,
+          overall_suggestion: payload.overall_suggestion ?? null,
+          rubric: payload.rubric, // jsonb
+        },
+      ])
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Supabase insert error:", error);
+      throw error;
+    }
+
+    // ส่งต่อไป n8n
+    const n8nUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+    if (!n8nUrl) {
+      console.warn("N8N webhook URL is not defined.");
+      return data;
+    }
+    await fetch(n8nUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    return data;
+  } catch (err) {
+    console.error("Error saving evaluation:", err);
+    throw err;
   }
-
-  return data;
 }
