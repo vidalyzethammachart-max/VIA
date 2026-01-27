@@ -7,7 +7,6 @@ import {
   type Rubric,
   type EvaluationPayload,
 } from "../services/evaluationService";
-import type { Form } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 

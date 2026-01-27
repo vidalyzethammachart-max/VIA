@@ -26,24 +26,8 @@ export default function Login({}: Props) {
   };
 
   return (
-    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-black">
-      <motion.div
-        className="absolute inset-0"
-        animate={{
-          backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        style={{
-          backgroundImage:
-            "linear-gradient(120deg, #845ec2, #2c73d2, #0081cf, #0089ba, #008e9b, #008f7a)",
-          backgroundSize: "400% 400%",
-        }}
-      />
-      <div className="relative z-10 flex items-center justify-center w-full px-4 py-12 max-w-md bg-white/10 rounded-2xl shadow-2xl">
+    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#f7f9fb]">
+      <div className="relative z-10 flex items-center justify-center w-full px-4 py-12 max-w-md rounded-2xl bg-[#ffffff] border-4 border-[#eaeef2] shadow-lg shadow-gray-200/50">
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -53,34 +37,49 @@ export default function Login({}: Props) {
           <div className="flex justify-center p-2">
             <img src={Logo} alt="Logo" className="w-100 h-auto" />
           </div>
+          <div>
+            <h2 className="text-2xl font-bold text-center text-black mb-6">
+              VIDEO INTELLIGENCE &amp; ANALYTICS
+            </h2>
+          </div>
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-gray-300 mb-1">Email</label>
+              <label className="block text-gray-600 mb-1 font-medium">
+                Email
+              </label>
               <input
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-800 text-white border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-[#ffffff] text-black border border-gray-500 rounded-lg focus:ring-1 focus:ring-[#04418b] focus:outline-none"
                 placeholder="Enter your email"
                 required
               />
             </div>
             <div>
-              <label className="block text-gray-300 mb-1">Password</label>
+              <label className="block text-gray-600 mb-1 font-medium">
+                Password
+              </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-800 text-white border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-[#ffffff] text-black border border-gray-500 rounded-lg focus:ring-1 focus:ring-[#04418b] focus:outline-none"
                 placeholder="Enter your password"
                 required
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-semibold transition"
+              className="w-full bg-[#04418b] hover:bg-[#04416b] text-white py-2 rounded-lg font-semibold transition"
             >
               Login
+            </button>
+            <button
+              type="submit"
+              className="w-full bg-[#1a5fb4] hover:bg-[#04416b] text-white py-2 rounded-lg font-semibold transition"
+            >
+              Register
             </button>
           </form>
         </motion.div>
