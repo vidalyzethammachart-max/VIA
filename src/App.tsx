@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabaseClient";
 
 import Login from "./page/Login";
 import FormSubmit from "./page/FormSubmit";
+import Register from "./page/Register";
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -34,6 +35,10 @@ export default function App() {
       <Route
         path="/"
         element={!session ? <Login /> : <Navigate to="/form-submit" />}
+      />
+      <Route
+        path="/register"
+        element={!session ? <Register /> : <Navigate to="/form-submit" />}
       />
 
       {/* protected */}

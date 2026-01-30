@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 import Logo from "../assets/logo_no_bg.png";
 
@@ -9,6 +10,8 @@ type Props = {};
 export default function Login({}: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +27,11 @@ export default function Login({}: Props) {
       console.log("Login success:", data.user);
     }
   };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    navigate("/register");
+  }
 
   return (
     <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#f7f9fb]">
@@ -78,6 +86,7 @@ export default function Login({}: Props) {
             <button
               type="submit"
               className="w-full bg-[#1a5fb4] hover:bg-[#04416b] text-white py-2 rounded-lg font-semibold transition"
+              onClick={handleRegister}
             >
               Register
             </button>
