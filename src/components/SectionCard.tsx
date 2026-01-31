@@ -71,12 +71,12 @@ export function SectionCard({ section, answers, onToggle }: Props) {
 
               {/* ปุ่ม ✓ */}
               {[5, 4, 3, 2, 1].map((value) => {
-                const selected = answers[q.id] === value;
+                const selected = answers[q.label] === value;
                 return (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => onToggle(q.id, value as LikertValue)}
+                    onClick={() => onToggle(q.label, value as LikertValue)}
                     className={`flex items-center justify-center border-l border-slate-100 py-2 transition ${
                       selected ? "bg-primary/5" : "bg-white hover:bg-slate-50"
                     }`}

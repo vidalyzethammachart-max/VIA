@@ -22,37 +22,40 @@ function FormSubmit() {
   // ---------------- Handlers ----------------
 
   const handleToggleAnswer = (
-    sectionId: string,
-    questionId: string,
+    sectionTitle: string,
+    questionLabel: string,
     value: LikertValue,
   ) => {
     setAnswers((prev) => {
-      const sectionAnswers = prev[sectionId] || {};
-      const current = sectionAnswers[questionId];
+      const sectionAnswers = prev[sectionTitle] || {};
+      const current = sectionAnswers[questionLabel];
       const nextValue = current === value ? undefined : value;
 
       return {
         ...prev,
-        [sectionId]: {
+        [sectionTitle]: {
           ...sectionAnswers,
-          [questionId]: nextValue,
+          [questionLabel]: nextValue,
         },
       };
     });
   };
 
   // ---------------- Builders ----------------
-
   const buildRubric = (): Rubric => {
     const rubric: Rubric = {};
 
     SECTIONS.forEach((section) => {
-      const sectionAnswers = answers[section.id] ?? {};
-      rubric[section.id] = {};
+      const sectionKey = section.id; // ✅ ใช้ id ของหมวด
+      const sectionAnswers = answers[sectionKey] ?? {};
+
+      rubric[sectionKey] = {}; // ✅ rubric key เป็น id
 
       section.questions.forEach((question) => {
-        const value = sectionAnswers[question.id];
-        rubric[section.id][question.id] =
+        const questionKey = question.label; // ✅ ใช้ label (title ของคำถาม)
+        const value = sectionAnswers[questionKey];
+
+        rubric[sectionKey][questionKey] =
           typeof value === "number" ? value : null;
       });
     });
@@ -202,8 +205,8 @@ function FormSubmit() {
                 key={section.id}
                 section={section}
                 answers={answers[section.id] || {}}
-                onToggle={(questionId, value) =>
-                  handleToggleAnswer(section.id, questionId, value)
+                onToggle={(questionLabel, value) =>
+                  handleToggleAnswer(section.id, questionLabel, value)
                 }
               />
             ))}
