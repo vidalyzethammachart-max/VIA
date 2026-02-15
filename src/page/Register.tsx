@@ -8,11 +8,11 @@ import Logo from "../assets/logo_no_bg.png";
 export default function Register() {
   const navigate = useNavigate();
 
+  const [userId, setUserId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -30,31 +30,51 @@ export default function Register() {
       return;
     }
 
-    setLoading(true);
 
     // สมัครสมาชิก
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      // options: {
-      //   emailRedirectTo: `${window.location.origin}/`, // ถ้าคุณใช้ confirm email + redirect
-      // },
     });
-
-    setLoading(false);
 
     if (error) {
       setErrorMsg(error.message);
       return;
     }
 
-    // กรณีเปิด Email confirmation: user อาจยังไม่ login จนกว่าจะกดยืนยันในอีเมล
+    // บันทึกข้อมูลลงตาราง user_information
+    if (data.user) {
+      console.log("Attempting to insert user data:", {
+        user_id: userId,
+        email: email,
+        auth_user_id: data.user.id,
+      });
+
+      const { error: insertError } = await supabase
+        .from("user_information")
+        .insert({
+          user_id: userId,
+          email: email,
+          auth_user_id: data.user.id,
+        });
+
+      if (insertError) {
+        console.error("Insert error:", insertError);
+        setErrorMsg(
+          `สมัครสำเร็จแต่ไม่สามารถบันทึกข้อมูลได้: ${insertError.message}\n` +
+          `กรุณาติดต่อผู้ดูแลระบบหรือตรวจสอบว่าตาราง user_information มีอยู่และมีการตั้งค่า RLS ที่ถูกต้อง`
+        );
+        return;
+      }
+
+      console.log("User data inserted successfully!");
+    }
+
     if (!data.session) {
       setSuccessMsg("สมัครสำเร็จ! กรุณาไปยืนยันอีเมลก่อนเข้าสู่ระบบ");
       return;
     }
 
-    // กรณีไม่ได้บังคับ confirm email: จะได้ session เลย
     navigate("/form-submit");
   };
 
@@ -75,6 +95,19 @@ export default function Register() {
               VIDEO INTELLIGENCE &amp; ANALYTICS
             </h2>
             <form onSubmit={handleRegister} className="space-y-5">
+              <div>
+                <label className="block text-gray-600 mb-1 font-medium">
+                  User ID
+                </label>
+                <input
+                  type="text"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  className="w-full px-4 py-2 bg-[#ffffff] text-black border border-gray-500 rounded-lg focus:ring-1 focus:ring-[#04418b] focus:outline-none"
+                  placeholder="Enter your User ID"
+                  required
+                />
+              </div>
               <div>
                 <label className="block text-gray-600 mb-1 font-medium">
                   Email

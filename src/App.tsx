@@ -5,6 +5,10 @@ import { supabase } from "./lib/supabaseClient";
 import Login from "./page/Login";
 import FormSubmit from "./page/FormSubmit";
 import Register from "./page/Register";
+import Profile from "./page/Profile";
+import Dashboard from "./page/Dashboard";
+import SessionMonitor from "./components/SessionMonitor";
+import Footer from "./components/Footer";
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -30,22 +34,39 @@ export default function App() {
   if (loading) return <p>Loading...</p>;
 
   return (
-    <Routes>
-      {/* public */}
-      <Route
-        path="/"
-        element={!session ? <Login /> : <Navigate to="/form-submit" />}
-      />
-      <Route
-        path="/register"
-        element={!session ? <Register /> : <Navigate to="/form-submit" />}
-      />
+    <div className="flex flex-col min-h-screen">
+      {/* เพิ่ม SessionMonitor เพื่อตรวจสอบ session timeout */}
+      {session && <SessionMonitor />}
+      
+      <div className="flex-grow">
+        <Routes>
+          {/* public */}
+          <Route
+            path="/"
+            element={!session ? <Login /> : <Navigate to="/form-submit" />}
+          />
+          <Route
+            path="/register"
+            element={!session ? <Register /> : <Navigate to="/form-submit" />}
+          />
 
-      {/* protected */}
-      <Route
-        path="/form-submit"
-        element={session ? <FormSubmit /> : <Navigate to="/" />}
-      />
-    </Routes>
+          {/* protected */}
+          <Route
+            path="/form-submit"
+            element={session ? <FormSubmit /> : <Navigate to="/" />}
+          />
+          <Route
+            path="/profile"
+            element={session ? <Profile /> : <Navigate to="/" />}
+          />
+          <Route
+            path="/dashboard"
+            element={session ? <Dashboard /> : <Navigate to="/" />}
+          />
+        </Routes>
+      </div>
+      
+      <Footer />
+    </div>
   );
 }

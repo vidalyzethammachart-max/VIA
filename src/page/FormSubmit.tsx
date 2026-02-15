@@ -7,8 +7,8 @@ import {
   type Rubric,
   type EvaluationPayload,
 } from "../services/evaluationService";
-import { supabase } from "../lib/supabase";
 
+import ProfileDropdown from "../components/ProfileDropdown";
 
 function FormSubmit() {
   const [orderNumber, setOrderNumber] = useState("");
@@ -97,12 +97,6 @@ function FormSubmit() {
     }
   };
 
-  // -------------------Logout------------------
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.reload();
-  } 
-
   // ---------------- UI ----------------
   return (
     <div className="min-h-screen bg-slate-50">
@@ -127,10 +121,8 @@ function FormSubmit() {
 
             {/* badge */}
             <div
-              className="ml-auto px-4 py-2 bg-red-100 text-red-800 text-xs font-semibold rounded-full hover:bg-red-200 cursor-pointer select-none"
-              onClick={handleLogout}
-            >
-              Logout
+              className="ml-auto">
+              <ProfileDropdown />
             </div>
           </div>
         </div>
