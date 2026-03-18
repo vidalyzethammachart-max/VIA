@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabaseClient";
 import { SECTIONS, LIKERT_LABELS, type LikertValue } from "../config/sections";
 import Logo from "../assets/logo.png";
 import { SectionCard } from "../components/SectionCard";
@@ -18,6 +19,15 @@ function FormSubmit() {
   >({});
   const [comment, setComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserEmail(user.email ?? null);
+      }
+    });
+  }, []);
 
   // ---------------- Handlers ----------------
 
@@ -68,10 +78,10 @@ function FormSubmit() {
     subject_name: subjectName.trim() || "ไม่ระบุชื่อวิชา",
     overall_suggestion: comment.trim(),
     rubric: buildRubric(),
+    Email: userEmail || undefined,
   });
 
   // ---------------- Submit ----------------
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSaving(true);
@@ -84,11 +94,12 @@ function FormSubmit() {
 
       console.log("✅ Saved payload:", payload);
       alert("บันทึกข้อมูลสำเร็จ! 🎉");
-      // ถ้าอยากรีเซ็ตฟอร์ม ก็เคลียร์ state ตรงนี้ได้
-      // setOrderNumber("");
-      // setSubjectName("");
-      // setAnswers({});
-      // setComment("");
+
+      // เคลียร์ฟอร์มหลังจากบันทึกสำเร็จ
+      setOrderNumber("");
+      setSubjectName("");
+      setAnswers({});
+      setComment("");
     } catch (error) {
       console.error("❌ Error while saving:", error);
       alert("เกิดข้อผิดพลาดขณะบันทึกข้อมูล ❌");
@@ -120,8 +131,7 @@ function FormSubmit() {
             </div>
 
             {/* badge */}
-            <div
-              className="ml-auto">
+            <div className="ml-auto">
               <ProfileDropdown />
             </div>
           </div>
@@ -137,7 +147,7 @@ function FormSubmit() {
               {/* ลำดับ */}
               <div className="md:w-32 space-y-1">
                 <label className="text-xs font-medium text-slate-700">
-                  ลำดับ
+                  หมายเลขวิชา
                 </label>
                 <input
                   value={orderNumber}
@@ -150,12 +160,12 @@ function FormSubmit() {
               {/* ชื่อวิชา */}
               <div className="flex-1 space-y-1">
                 <label className="text-xs font-medium text-slate-700">
-                  ชื่อวิชา / รายวิชา
+                  ชื่อวิดีโอ
                 </label>
                 <input
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
-                  placeholder="เช่น ฟิสิกส์ 1, คณิตศาสตร์พื้นฐาน, ภาษาอังกฤษเพื่อการสื่อสาร"
+                  placeholder="เช่น Video Test"
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary"
                 />
               </div>
@@ -176,7 +186,7 @@ function FormSubmit() {
 
             {/* legend 1–5 */}
             <div className="flex flex-wrap gap-2 text-xs md:text-sm text-slate-600">
-              {([5, 4, 3, 2, 1] as LikertValue[]).map((v) => (
+              {([1, 2, 3, 4, 5] as LikertValue[]).map((v) => (
                 <div
                   key={v}
                   className="inline-flex items-center gap-2 rounded-full bg-primary/5 px-3 py-1 border border-primary/20"

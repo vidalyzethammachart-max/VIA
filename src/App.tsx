@@ -47,7 +47,7 @@ export default function App() {
           />
           <Route
             path="/register"
-            element={!session ? <Register /> : <Navigate to="/form-submit" />}
+            element={<Register />}
           />
 
           {/* protected */}
