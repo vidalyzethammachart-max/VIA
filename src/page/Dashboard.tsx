@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 // Type definitions
 type RubricValue = number | null;
@@ -42,10 +43,12 @@ const SECTION_TITLES: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SectionStats[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
   const [activeTab, setActiveTab] = useState<string>("1"); // Default to section 1
+  const [chartType, setChartType] = useState<"bar" | "donut">("bar");
 
   useEffect(() => {
     fetchEvaluations();
@@ -102,7 +105,7 @@ export default function Dashboard() {
 
     // Sort sections by ID (1-9)
     const sortedSectionIds = Array.from(sectionMap.keys()).sort(
-      (a, b) => parseInt(a) - parseInt(b)
+      (a, b) => parseInt(a) - parseInt(b),
     );
 
     sortedSectionIds.forEach((sectionId) => {
@@ -151,6 +154,30 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
+        {/* Back Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1 rounded-md px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition shadow-sm"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className="w-4 h-4"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            <span className="text-sm font-medium">กลับ</span>
+          </button>
+        </div>
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Dashboard สรุปผลการประเมิน
@@ -161,7 +188,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-8 overflow-x-auto pb-2">
+        <div className="mb-4 overflow-x-auto pb-2">
           <div className="flex space-x-2 min-w-max">
             {Object.entries(SECTION_TITLES).map(([id, title]) => (
               <button
@@ -179,6 +206,67 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Chart View Switcher */}
+        <div className="mb-8 flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-500">
+            รูปแบบการแสดงผล:
+          </span>
+          <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
+            <button
+              onClick={() => setChartType("bar")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                chartType === "bar"
+                  ? "bg-blue-50 text-[#04418b]"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              Bar Chart
+            </button>
+            <button
+              onClick={() => setChartType("donut")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                chartType === "donut"
+                  ? "bg-blue-50 text-[#04418b]"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
+                />
+              </svg>
+              Donut Chart
+            </button>
+          </div>
+        </div>
+
         {/* Content */}
         {activeSectionData ? (
           <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
@@ -193,60 +281,166 @@ export default function Dashboard() {
 
             <div className="p-6 space-y-10">
               {activeSectionData.questions.map((q, idx) => (
-                <div key={idx} className="border-b border-gray-100 last:border-0 pb-8 last:pb-0">
+                <div
+                  key={idx}
+                  className="border-b border-gray-100 last:border-0 pb-8 last:pb-0"
+                >
                   <div className="flex flex-col md:flex-row gap-8">
                     {/* Left: Chart */}
                     <div className="flex-1 space-y-4">
                       <h3 className="text-lg font-medium text-gray-800">
-                        {q.label}
+                        {idx + 1}. {q.label}
                       </h3>
-                      
-                      <div className="space-y-3 pt-2">
-                        {[5, 4, 3, 2, 1].map((score) => {
-                          const count = q.scores[score] || 0;
-                          const percentage = q.count > 0 ? (count / q.count) * 100 : 0;
-                          return (
-                            <div key={score} className="flex items-center gap-3 text-sm">
-                              <span className="w-4 text-right font-bold text-gray-500">
-                                {score}
-                              </span>
-                              <div className="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden relative group">
-                                <div
-                                  className="h-full rounded-md transition-all duration-500 relative flex items-center justify-end pr-2"
-                                  style={{
-                                    width: `${percentage}%`,
-                                    backgroundColor: getScoreColor(score),
-                                    opacity: percentage > 0 ? 1 : 0.3,
-                                  }}
-                                >
+
+                      {chartType === "bar" ? (
+                        <div className="space-y-3 pt-2">
+                          {[5, 4, 3, 2, 1].map((score) => {
+                            const count = q.scores[score] || 0;
+                            const percentage =
+                              q.count > 0 ? (count / q.count) * 100 : 0;
+                            return (
+                              <div
+                                key={score}
+                                className="flex items-center gap-3 text-sm"
+                              >
+                                <span className="w-12 text-right font-medium text-gray-500">
+                                  {score} คะแนน
+                                </span>
+                                <div className="flex-1 h-6 bg-gray-100 rounded-md overflow-hidden relative group">
+                                  <div
+                                    className="h-full rounded-md transition-all duration-500 relative flex items-center"
+                                    style={{
+                                      width: `${percentage}%`,
+                                      backgroundColor: getScoreColor(score),
+                                      opacity: percentage > 0 ? 1 : 0.3,
+                                    }}
+                                  ></div>
+                                  {/* Percentage Label */}
+                                  {percentage > 0 && (
+                                    <div className="absolute inset-0 flex items-center px-2">
+                                      <span className="text-[10px] font-bold text-white drop-shadow-sm">
+                                        {percentage.toFixed(0)}%
+                                      </span>
+                                    </div>
+                                  )}
+                                  {/* Tooltip on hover */}
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    <span className="text-[10px] font-bold text-gray-700 bg-white/90 px-2 py-0.5 rounded shadow-sm border border-gray-200">
+                                      {count} คน
+                                    </span>
+                                  </div>
                                 </div>
-                                {/* Tooltip on hover */}
-                                <div className="absolute inset-0 flex items-center pl-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <span className="text-xs font-semibold text-gray-700 bg-white/80 px-1 rounded shadow-sm">
-                                    {count} คน ({percentage.toFixed(1)}%)
-                                  </span>
-                                </div>
+                                <span className="w-8 text-right text-gray-600 font-medium">
+                                  {count}
+                                </span>
                               </div>
-                              <span className="w-10 text-right text-gray-600 font-medium">
-                                {count}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-8 py-4">
+                          {/* Donut Chart SVG SVG */}
+                          <div className="relative w-48 h-48">
+                            <svg
+                              viewBox="0 0 100 100"
+                              className="w-full h-full transform -rotate-90"
+                            >
+                              {(() => {
+                                let cumulativePercentage = 0;
+                                return [5, 4, 3, 2, 1].map((score) => {
+                                  const count = q.scores[score] || 0;
+                                  const percentage =
+                                    q.count > 0 ? (count / q.count) * 100 : 0;
+                                  if (percentage === 0) return null;
+
+                                  const strokeDasharray = `${percentage} ${100 - percentage}`;
+                                  const strokeDashoffset =
+                                    -cumulativePercentage;
+                                  cumulativePercentage += percentage;
+
+                                  return (
+                                    <circle
+                                      key={score}
+                                      cx="50"
+                                      cy="50"
+                                      r="40"
+                                      fill="transparent"
+                                      stroke={getScoreColor(score)}
+                                      strokeWidth="20"
+                                      strokeDasharray={strokeDasharray}
+                                      strokeDashoffset={strokeDashoffset}
+                                      className="transition-all duration-700 ease-out"
+                                    />
+                                  );
+                                });
+                              })()}
+                              {/* Inner Circle to make it a donut */}
+                              <circle cx="50" cy="50" r="30" fill="white" />
+                            </svg>
+                            {/* Center Text */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-3xl font-bold text-gray-800">
+                                {q.average.toFixed(1)}
+                              </span>
+                              <span className="text-[10px] text-gray-400 capitalize">
+                                Average
                               </span>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+
+                          {/* Legend for Donut */}
+                          <div className="grid grid-cols-2 sm:flex sm:flex-col gap-2">
+                            {[5, 4, 3, 2, 1].map((score) => {
+                              const count = q.scores[score] || 0;
+                              const percentage =
+                                q.count > 0 ? (count / q.count) * 100 : 0;
+                              return (
+                                <div
+                                  key={score}
+                                  className="flex items-center gap-2 text-xs"
+                                >
+                                  <div
+                                    className="w-3 h-3 rounded-full flex-shrink-0"
+                                    style={{
+                                      backgroundColor: getScoreColor(score),
+                                    }}
+                                  />
+                                  <span className="text-gray-600 min-w-[50px]">
+                                    {score} คะแนน:
+                                  </span>
+                                  <span className="font-bold text-gray-800">
+                                    {count}
+                                  </span>
+                                  <span className="text-gray-400">
+                                    ({percentage.toFixed(0)}%)
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Right: Score Summary */}
                     <div className="md:w-64 flex-shrink-0 flex flex-col items-center justify-center bg-gray-50 rounded-xl p-6 border border-gray-100">
                       <span className="text-gray-500 text-sm font-medium text-center mb-1">
-                        {q.label} {/* ชื่อหัวข้อบนคะแนน */}
+                        คะแนนเฉลี่ย
                       </span>
                       <div className="text-5xl font-bold text-[#04418b] my-2">
                         {q.average.toFixed(2)}
                       </div>
-                      <span className="text-gray-400 text-xs">คะแนนเฉลี่ย (เต็ม 5)</span>
-                      <div className="mt-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        ผู้ตอบ {q.count} คน
+                      <span className="text-gray-400 text-xs">
+                        จากเต็ม 5 คะแนน
+                      </span>
+                      <div className="mt-4 w-full h-px bg-gray-200"></div>
+                      <div className="mt-4 flex flex-col items-center">
+                        <span className="text-2xl font-bold text-gray-700">
+                          {q.count}
+                        </span>
+                        <span className="text-gray-400 text-xs">
+                          ผู้ตอบประเมิน
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -270,7 +464,9 @@ export default function Dashboard() {
                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
               />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">ไม่มีข้อมูล</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">
+              ไม่มีข้อมูล
+            </h3>
             <p className="mt-1 text-sm text-gray-500">
               ยังไม่มีข้อมูลการประเมินในหัวข้อนี้
             </p>
@@ -284,11 +480,17 @@ export default function Dashboard() {
 // Helper function for colors (like Google Forms)
 function getScoreColor(score: number): string {
   switch (score) {
-    case 5: return "#4285F4"; // Blue
-    case 4: return "#34A853"; // Green
-    case 3: return "#FBBC05"; // Yellow
-    case 2: return "#FA7B17"; // Orange
-    case 1: return "#EA4335"; // Red
-    default: return "#9AA0A6";
+    case 5:
+      return "#4285F4"; // Blue
+    case 4:
+      return "#34A853"; // Green
+    case 3:
+      return "#FBBC05"; // Yellow
+    case 2:
+      return "#FA7B17"; // Orange
+    case 1:
+      return "#EA4335"; // Red
+    default:
+      return "#9AA0A6";
   }
 }

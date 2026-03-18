@@ -13,6 +13,7 @@ export interface EvaluationPayload {
   subject_name: string;
   overall_suggestion?: string | null;
   rubric: RubricPayload;
+  Email?: string | null;
 }
 
 export type RubricValue = number | null;
