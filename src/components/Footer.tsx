@@ -6,31 +6,38 @@ export default function Footer() {
           {/* Column 1: About */}
           <div>
             <h3 className="text-lg font-bold mb-4">
-              VIDEO INTELLIGENCE & ANALYTICS
+              VIA :Video Intelligence & Analytics
             </h3>
+            <p className="text-sm text-gray-300 font-bold leading-relaxed">
+              ประเมินและวิเคราะห์วิดีโออัจฉริยะ
+            </p>
             <p className="text-sm text-gray-300 leading-relaxed">
-              ระบบวิเคราะห์วิดีโออัจฉริยะ
-              <br />
-              เพื่อการจัดการและตรวจสอบที่มีประสิทธิภาพ
+              ระบบประเมินคุณภาพสื่อดิจิทัลด้านเทคนิคเพื่อการศึกษา
             </p>
           </div>
 
           {/* Column 2: Contact */}
+          <div>
+          </div>
+
+          {/* Column 3: Quick Links */}
           <div>
             <h3 className="text-lg font-bold mb-4">ติดต่อเรา</h3>
             <ul className="space-y-2 text-sm text-gray-300">
               <li className="flex items-start gap-2">
                 <span>📍</span>
                 <span>
-                  มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ
+                  Mahidol University International College (MUIC)
                   <br />
-                  1518 ถ.ประชาราษฎร์ 1 แขวงวงศ์สว่าง เขตบางซื่อ กรุงเทพฯ 10800
+                  Phutthamonthon Sai 4 Road, Salaya, Nakhon Pathom,
+                  <br />
+                  73170, Thailand
                 </span>
               </li>
               <li className="flex items-center gap-2">
                 <span>📞</span>
-                <a href="tel:02-555-2000" className="hover:text-white transition">
-                  02-555-2000
+                <a className="hover:text-white transition">
+                  Telephone:+66 2 700 5000 Ext.4337
                 </a>
               </li>
               <li className="flex items-center gap-2">
@@ -39,34 +46,7 @@ export default function Footer() {
                   href="mailto:info@via.ac.th"
                   className="hover:text-white transition"
                 >
-                  info@via.ac.th
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 3: Quick Links */}
-          <div>
-            <h3 className="text-lg font-bold mb-4">ลิงก์ด่วน</h3>
-            <ul className="space-y-2 text-sm text-gray-300">
-              <li>
-                <a href="#" className="hover:text-white transition">
-                  เกี่ยวกับเรา
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:text-white transition">
-                  บริการของเรา
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:text-white transition">
-                  นโยบายความเป็นส่วนตัว
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:text-white transition">
-                  เงื่อนไขการใช้งาน
+                  E-mail:thammachart.kan@mahidol.ac.th
                 </a>
               </li>
             </ul>

@@ -10,6 +10,7 @@ import {
 } from "../services/evaluationService";
 
 import ProfileDropdown from "../components/ProfileDropdown";
+import { Link } from "react-router-dom";
 
 function FormSubmit() {
   const [orderNumber, setOrderNumber] = useState("");
@@ -20,11 +21,22 @@ function FormSubmit() {
   const [comment, setComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserEmail(user.email ?? null);
+        
+        supabase
+          .from("user_information")
+          .select("role")
+          .eq("auth_user_id", user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.role === "admin") setIsAdmin(true);
+          });
       }
     });
   }, []);
@@ -93,7 +105,7 @@ function FormSubmit() {
       await submitEvaluation(payload);
 
       console.log("✅ Saved payload:", payload);
-      alert("บันทึกข้อมูลสำเร็จ! 🎉");
+      setShowSuccessModal(true);
 
       // เคลียร์ฟอร์มหลังจากบันทึกสำเร็จ
       setOrderNumber("");
@@ -119,19 +131,39 @@ function FormSubmit() {
 
             <div className="flex flex-col">
               <span className="text-xs font-semibold tracking-wide text-primary">
-                Video Intelligence &amp; Analytics
+                Video Intelligence & Analytics
               </span>
               <h1 className="text-lg md:text-xl font-semibold text-slate-900">
-                แบบฟอร์มประเมินวิดีโอการสอน
+                ประเมินและวิเคราะห์วิดีโออัจฉริยะ
               </h1>
               <p className="text-xs md:text-sm text-slate-500">
-                กรุณาประเมินตามความเป็นจริง
-                ข้อมูลนี้จะใช้เพื่อพัฒนาคุณภาพสื่อการสอน
+                ระบบประเมินคุณภาพสื่อดิจิทัลด้านเทคนิคเพื่อการศึกษา
               </p>
             </div>
 
             {/* badge */}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-3 sm:gap-4">
+              {isAdmin && (
+                <Link
+                  to="/dashboard"
+                  className="group flex items-center justify-center gap-2 px-3 py-1.5 sm:py-2 rounded-full bg-slate-50/50 border border-slate-200 shadow-sm hover:bg-white hover:border-slate-300 hover:shadow transition-all duration-300"
+                  title="ไปหน้า Dashboard"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110 duration-300"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <rect x="3" y="12" width="5" height="10" rx="1.5" fill="#93C5FD" className="group-hover:fill-blue-400 transition-colors duration-300" />
+                    <rect x="9.5" y="7" width="5" height="15" rx="1.5" fill="#FCA5A5" className="group-hover:fill-red-400 transition-colors duration-300" />
+                    <rect x="16" y="3" width="5" height="19" rx="1.5" fill="#C4B5FD" className="group-hover:fill-purple-400 transition-colors duration-300" />
+                  </svg>
+                  <span className="hidden sm:inline-block font-medium text-sm text-slate-600 group-hover:text-slate-900 transition-colors duration-300">
+                    Dashboard
+                  </span>
+                </Link>
+              )}
               <ProfileDropdown />
             </div>
           </div>
@@ -244,6 +276,52 @@ function FormSubmit() {
           </div>
         </form>
       </main>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-primary p-6 text-center relative overflow-hidden">
+              {/* Background Decoration */}
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-black/10 rounded-full blur-2xl"></div>
+
+              <div className="relative z-10 w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-md">
+                  <svg
+                    className="w-6 h-6 text-primary"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={3}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="relative z-10 text-xl font-bold text-white mb-1">
+                บันทึกข้อมูลสำเร็จ
+              </h3>
+              <p className="relative z-10 text-white/90 text-sm font-medium">
+                ส่งแบบประเมินเรียบร้อยแล้ว ขอบคุณครับ
+              </p>
+            </div>
+            <div className="p-5 text-center bg-white">
+              <button
+                type="button"
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                ตกลง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

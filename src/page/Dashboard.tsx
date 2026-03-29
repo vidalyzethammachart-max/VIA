@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { SECTIONS } from "../config/sections";
 
 // Type definitions
 type RubricValue = number | null;
@@ -29,30 +30,48 @@ type SectionStats = {
   questions: QuestionStats[];
 };
 
-// Section mapping (อาจจะดึงจาก config/sections.ts ในอนาคต)
-const SECTION_TITLES: Record<string, string> = {
-  "1": "ด้านบทเรียน (Script)",
-  "2": "ด้านมุมกล้อง (Camera Angle)",
-  "3": "ด้านองค์ประกอบภาพ (Composition)",
-  "4": "ด้านผู้บรรยาย (Actor)",
-  "5": "ด้านลำดับภาพ (Story Board)",
-  "6": "ด้านฉาก (Scene)",
-  "7": "ด้านแสง (Lighting)",
-  "8": "ด้านเสียง (Sound)",
-  "9": "ด้านกราฟิก (Graphic)",
-};
+// Section mapping imported from config/sections.ts
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SectionStats[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
-  const [activeTab, setActiveTab] = useState<string>("1"); // Default to section 1
+  const [activeTab, setActiveTab] = useState<string>(SECTIONS[0]?.id || "1"); // Default to section 1
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
 
   useEffect(() => {
-    fetchEvaluations();
+    checkAccessAndFetch();
   }, []);
+
+  const checkAccessAndFetch = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user;
+      
+      if (!user) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const { data: userInfo, error: userError } = await supabase
+        .from("user_information")
+        .select("role")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+
+      if (userError || !userInfo || userInfo.role !== "admin") {
+        alert("คุณไม่มีสิทธิเข้าถึงหน้า Dashboard เนื่องจากหน้านี้เฉพาะแอดมินเท่านั้น");
+        navigate("/form-submit", { replace: true });
+        return;
+      }
+
+      await fetchEvaluations();
+    } catch (error) {
+      console.error("Access check failed", error);
+      navigate("/form-submit", { replace: true });
+    }
+  };
 
   const fetchEvaluations = async () => {
     try {
@@ -103,22 +122,21 @@ export default function Dashboard() {
 
     const result: SectionStats[] = [];
 
-    // Sort sections by ID (1-9)
-    const sortedSectionIds = Array.from(sectionMap.keys()).sort(
-      (a, b) => parseInt(a) - parseInt(b),
-    );
-
-    sortedSectionIds.forEach((sectionId) => {
-      const questionMap = sectionMap.get(sectionId)!;
+    SECTIONS.forEach((sectionConf) => {
+      const sectionId = sectionConf.id;
+      const questionMap = sectionMap.get(sectionId) || new Map();
       const questions: QuestionStats[] = [];
 
-      questionMap.forEach((scores, label) => {
+      sectionConf.questions.forEach((qConf) => {
+        const label = qConf.label;
+        const scores: number[] = questionMap.get(label) || [];
+
         const count = scores.length;
-        const totalScore = scores.reduce((sum, s) => sum + s, 0);
+        const totalScore = scores.reduce((sum: number, s: number) => sum + s, 0);
         const average = count > 0 ? totalScore / count : 0;
 
         const scoreCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-        scores.forEach((s) => {
+        scores.forEach((s: number) => {
           if (s >= 1 && s <= 5) scoreCounts[s as 1 | 2 | 3 | 4 | 5]++;
         });
 
@@ -132,7 +150,7 @@ export default function Dashboard() {
 
       result.push({
         id: sectionId,
-        title: SECTION_TITLES[sectionId] || `Section ${sectionId}`,
+        title: sectionConf.title,
         questions,
       });
     });
@@ -187,83 +205,89 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-4 overflow-x-auto pb-2">
-          <div className="flex space-x-2 min-w-max">
-            {Object.entries(SECTION_TITLES).map(([id, title]) => (
+        {/* Controls Section */}
+        <div className="mb-8 flex flex-col xl:flex-row justify-between items-start gap-6">
+          {/* Section Selection (Buttons) */}
+          <div className="flex-1 w-full">
+            <span className="text-sm font-medium text-gray-500 mb-2 block">
+              เลือกหัวข้อประเมิน:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {SECTIONS.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => setActiveTab(section.id)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeTab === section.id
+                      ? "bg-[#04418b] text-white shadow-md"
+                      : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                  }`}
+                >
+                  {section.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Chart View Switcher */}
+          <div className="w-full xl:w-auto flex-shrink-0">
+            <span className="text-sm font-medium text-gray-500 mb-2 block">
+              รูปแบบการแสดงผล:
+            </span>
+            <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm w-full sm:w-auto">
               <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === id
-                    ? "bg-[#04418b] text-white shadow-md"
-                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                onClick={() => setChartType("bar")}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  chartType === "bar"
+                    ? "bg-blue-50 text-[#04418b]"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                {title}
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+                Bar Chart
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Chart View Switcher */}
-        <div className="mb-8 flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-500">
-            รูปแบบการแสดงผล:
-          </span>
-          <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-            <button
-              onClick={() => setChartType("bar")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                chartType === "bar"
-                  ? "bg-blue-50 text-[#04418b]"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+              <button
+                onClick={() => setChartType("donut")}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  chartType === "donut"
+                    ? "bg-blue-50 text-[#04418b]"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-              Bar Chart
-            </button>
-            <button
-              onClick={() => setChartType("donut")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                chartType === "donut"
-                  ? "bg-blue-50 text-[#04418b]"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
-                />
-              </svg>
-              Donut Chart
-            </button>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
+                  />
+                </svg>
+                Donut Chart
+              </button>
+            </div>
           </div>
         </div>
 

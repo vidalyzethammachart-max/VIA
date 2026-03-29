@@ -53,7 +53,7 @@ export default function Login({}: Props) {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-gray-600 mb-1 font-medium">
-                Email
+                E-mail
               </label>
               <input
                 type="text"
@@ -84,12 +84,21 @@ export default function Login({}: Props) {
               Login
             </button>
             <button
-              type="submit"
+              type="button"
               className="w-full bg-[#1a5fb4] hover:bg-[#04416b] text-white py-2 rounded-lg font-semibold transition"
               onClick={handleRegister}
             >
               Register
             </button>
+            <div className="text-center mt-2">
+              <button
+                type="button"
+                onClick={() => navigate("/forgot-password")}
+                className="text-sm font-medium text-[#04418b] hover:underline hover:text-[#04416b] transition"
+              >
+                ลืมรหัสผ่านใช่หรือไม่?
+              </button>
+            </div>
           </form>
         </motion.div>
       </div>
