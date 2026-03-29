@@ -6,8 +6,24 @@ import ProfileImg from "../assets/profile.jpg";
 export default function ProfileDropdown() {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase
+          .from("user_information")
+          .select("role")
+          .eq("auth_user_id", user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.role === "admin") setIsAdmin(true);
+          });
+      }
+    });
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -55,14 +71,16 @@ export default function ProfileDropdown() {
                 👤 โปรไฟล์
               </button>
             </li>
-            <li>
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100"
-              >
-                📊 Dashboard
-              </button>
-            </li>
+            {isAdmin && (
+              <li>
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  📊 Dashboard
+                </button>
+              </li>
+            )}
             <hr className="my-1" />
             <li>
               <button

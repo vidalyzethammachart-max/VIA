@@ -7,6 +7,8 @@ import FormSubmit from "./page/FormSubmit";
 import Register from "./page/Register";
 import Profile from "./page/Profile";
 import Dashboard from "./page/Dashboard";
+import ForgotPassword from "./page/ForgotPassword";
+import ResetPassword from "./page/ResetPassword";
 import SessionMonitor from "./components/SessionMonitor";
 import Footer from "./components/Footer";
 
@@ -48,6 +50,14 @@ export default function App() {
           <Route
             path="/register"
             element={<Register />}
+          />
+          <Route
+            path="/forgot-password"
+            element={<ForgotPassword />}
+          />
+          <Route
+            path="/reset-password"
+            element={<ResetPassword />}
           />
 
           {/* protected */}

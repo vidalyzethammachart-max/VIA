@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
-// กำหนดเวลา session timeout (1 ชั่วโมง = 3600 วินาที)
-const SESSION_TIMEOUT = 3600 * 1000; // มิลลิวินาที
+// กำหนดเวลา session timeout (24 ชั่วโมง = 86400 วินาที)
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // มิลลิวินาที
 const WARNING_TIME = 5 * 60 * 1000; // แจ้งเตือนก่อน 5 นาที
 
 export default function SessionMonitor() {
@@ -30,7 +30,7 @@ export default function SessionMonitor() {
         }, warningTime);
       }
 
-      // ตั้งเวลา logout อัตโนมัติหลังจาก 1 ชั่วโมง
+      // ตั้งเวลา logout อัตโนมัติหลังจาก 24 ชั่วโมง
       timeoutId = setTimeout(() => {
         handleLogout();
       }, SESSION_TIMEOUT);
