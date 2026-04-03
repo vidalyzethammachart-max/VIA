@@ -36,7 +36,7 @@ export default function Footer() {
               </li>
               <li className="flex items-center gap-2">
                 <span>📞</span>
-                <a className="hover:text-white transition">
+                <a>
                   Telephone:+66 2 700 5000 Ext.4337
                 </a>
               </li>
@@ -44,7 +44,7 @@ export default function Footer() {
                 <span>✉️</span>
                 <a
                   href="mailto:info@via.ac.th"
-                  className="hover:text-white transition"
+                  className=""
                 >
                   E-mail:thammachart.kan@mahidol.ac.th
                 </a>
@@ -62,7 +62,7 @@ export default function Footer() {
                 href="https://www.facebook.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition"
+                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center"
                 aria-label="Facebook"
               >
                 <svg
@@ -77,7 +77,7 @@ export default function Footer() {
                 href="https://twitter.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition"
+                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center"
                 aria-label="Twitter"
               >
                 <svg
@@ -92,7 +92,7 @@ export default function Footer() {
                 href="https://line.me"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition"
+                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center"
                 aria-label="LINE"
               >
                 <svg

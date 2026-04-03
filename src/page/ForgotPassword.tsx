@@ -2,102 +2,133 @@ import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import Logo from "../assets/logo_no_bg.png";
-import { motion } from "framer-motion";
+import { accountingService } from "../services/accountingService";
+import AuthAlert from "../components/AuthAlert";
+import {
+  getPasswordResetRequestErrorMessage,
+  RESET_EMAIL_COOLDOWN_MS,
+} from "../utils/passwordReset";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  const isCoolingDown = cooldownUntil !== null && cooldownUntil > Date.now();
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || isCoolingDown) return;
+
     setLoading(true);
     setMessage("");
     setError("");
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      const normalizedEmail = email.trim().toLowerCase();
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setMessage("ส่งลิงก์สำหรับรีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว กรุณาตรวจสอบกล่องจดหมาย");
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        normalizedEmail,
+        {
+          redirectTo: `${window.location.origin}/reset-password`,
+        },
+      );
+
+      if (resetError) {
+        setError(getPasswordResetRequestErrorMessage());
+        return;
       }
-    } catch (err: any) {
-      setError("เกิดข้อผิดพลาดในการดำเนินการ");
+
+      setCooldownUntil(Date.now() + RESET_EMAIL_COOLDOWN_MS);
+      setMessage(
+        "If an account exists for that email, a password reset link has been sent.",
+      );
+
+      // Best effort logging: available only when user is authenticated.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user && user.email?.toLowerCase() === normalizedEmail) {
+        void accountingService
+          .logActivity({
+            user_id: user.id,
+            action: "REQUEST_PASSWORD_RESET",
+            resource: "auth",
+            metadata: { email: normalizedEmail },
+          })
+          .catch((logError) => {
+            console.error("Activity log failed:", logError);
+          });
+      }
+    } catch {
+      setError(getPasswordResetRequestErrorMessage());
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#f7f9fb]">
-      <div className="relative z-10 flex items-center justify-center w-full px-4 py-12 max-w-md rounded-2xl bg-[#ffffff] border-4 border-[#eaeef2] shadow-lg shadow-gray-200/50">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className="relative z-10 w-full max-w-md backdrop-blur-lg p-8 rounded-2xl shadow-4xl"
-        >
-          <div className="flex justify-center p-2 mb-4">
-            <img src={Logo} alt="Logo" className="w-100 h-auto" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb]">
+      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-[#ffffff] px-4 py-12 shadow-lg shadow-gray-200/50">
+        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 shadow-4xl backdrop-blur-lg">
+          <div className="mb-4 flex justify-center p-2">
+            <img src={Logo} alt="Logo" className="h-auto w-100" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-center text-black mb-2">
-              ลืมรหัสผ่าน
+            <h2 className="mb-2 text-center text-2xl font-bold text-black">
+              Forgot Password
             </h2>
-            <p className="text-sm text-center text-gray-500 mb-6">
-              ระบุอีเมลของคุณเพื่อรับลิงก์รีเซ็ตรหัสผ่าน
+            <p className="mb-6 text-center text-sm text-gray-500">
+              Enter your email to receive a password reset link.
             </p>
           </div>
 
-          {message && (
-            <div className="mb-4 text-sm text-green-700 bg-green-100 p-3 rounded-lg border border-green-200 text-center">
-              {message}
-            </div>
-          )}
+          {message && <AuthAlert variant="success" message={message} />}
 
-          {error && (
-            <div className="mb-4 text-sm text-red-700 bg-red-100 p-3 rounded-lg border border-red-200 text-center">
-              {error}
-            </div>
+          {error && <AuthAlert variant="error" message={error} />}
+
+          {isCoolingDown && !error && (
+            <AuthAlert
+              variant="info"
+              message="Please wait a few seconds before requesting another reset email."
+            />
           )}
 
           <form onSubmit={handleReset} className="space-y-5">
             <div>
-              <label className="block text-gray-600 mb-1 font-medium">
-                E-mail
-              </label>
+              <label className="mb-1 block font-medium text-gray-600">E-mail</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 bg-[#ffffff] text-black border border-gray-500 rounded-lg focus:ring-1 focus:ring-[#04418b] focus:outline-none"
+                disabled={loading}
+                className="w-full rounded-lg border border-gray-500 bg-[#ffffff] px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b]"
                 placeholder="Enter your email"
+                autoComplete="email"
                 required
               />
             </div>
-            
+
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-[#04418b] hover:bg-[#04416b] text-white py-2 rounded-lg font-semibold transition disabled:opacity-50"
+              disabled={loading || isCoolingDown}
+              className="w-full rounded-lg bg-[#04418b] py-2 font-semibold text-white disabled:opacity-50 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#04416b] motion-safe:active:scale-[0.98]"
             >
-              {loading ? "กำลังส่งข้อมูล..." : "ส่งลิงก์รีเซ็ตรหัสผ่าน"}
+              {loading ? "Sending..." : "Send Reset Link"}
             </button>
             <button
               type="button"
-              className="w-full bg-transparent hover:bg-gray-100 text-gray-600 border border-gray-300 py-2 rounded-lg font-semibold transition"
+              className="w-full rounded-lg border border-gray-300 bg-transparent py-2 font-semibold text-gray-600 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-gray-100 motion-safe:active:scale-[0.98]"
               onClick={() => navigate("/")}
             >
-              กลับไปหน้าเข้าสู่ระบบ
+              Back to Login
             </button>
           </form>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

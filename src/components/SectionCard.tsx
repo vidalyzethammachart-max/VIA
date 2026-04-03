@@ -80,14 +80,14 @@ export function SectionCard({ section, answers, onToggle }: Props) {
                       key={value}
                       type="button"
                       onClick={() => onToggle(q.label, value as LikertValue)}
-                      className={`flex-1 md:flex-none flex items-center justify-center border-l first:border-l-0 md:first:border-l border-slate-100 py-3 md:py-2 transition ${
-                        selected ? "bg-primary/5" : "bg-white hover:bg-slate-50"
+                      className={`flex-1 md:flex-none flex items-center justify-center border-l first:border-l-0 md:first:border-l border-slate-100 py-3 md:py-2 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out ${
+                        selected ? "bg-primary/5" : "bg-white motion-safe:hover:bg-slate-50"
                       }`}
                     >
                       <span
-                        className={`inline-flex h-8 w-8 md:h-7 md:w-7 items-center justify-center rounded-full border text-sm font-semibold transition-all ${
+                        className={`inline-flex h-8 w-8 md:h-7 md:w-7 items-center justify-center rounded-full border text-sm font-semibold motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out ${
                           selected
-                            ? "bg-primary border-primary text-white scale-110 shadow-sm"
+                            ? "bg-primary border-primary text-white shadow-sm motion-safe:scale-105"
                             : "bg-white border-slate-300 text-slate-400/60"
                         }`}
                       >

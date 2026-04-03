@@ -1,5 +1,6 @@
 // src/services/evaluationService.ts
 import { supabase } from "../lib/supabaseClient";
+import { accountingService } from "./accountingService";
 
 // รูปแบบ rubric ที่ส่งมาจากฟอร์ม
 export type RubricPayload = {
@@ -9,6 +10,7 @@ export type RubricPayload = {
 };
 
 export interface EvaluationPayload {
+  user_id?: string;
   order_number?: string | null;
   subject_name: string;
   overall_suggestion?: string | null;
@@ -48,17 +50,27 @@ export async function submitEvaluation(payload: EvaluationPayload) {
       throw error;
     }
 
-    // ส่งต่อไป n8n
-    const n8nUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
-    if (!n8nUrl) {
-      console.warn("N8N webhook URL is not defined.");
-      return data;
+    if (payload.user_id) {
+      void accountingService.logActivity({
+        user_id: payload.user_id,
+        action: "evaluation.submitted",
+        resource: "evaluations",
+        metadata: {
+          evaluation_id: data?.id,
+          order_number: payload.order_number ?? null,
+        },
+      }).catch((logError) => {
+        console.error("Activity log failed:", logError);
+      });
     }
-    await fetch(n8nUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+
+    // ส่งต่อไป n8n ผ่าน Supabase Edge Function (ไม่เปิดเผย webhook ใน frontend)
+    const { error: forwardError } = await supabase.functions.invoke("forward-to-n8n", {
+      body: payload,
     });
+    if (forwardError) {
+      console.error("Edge function forwarding failed:", forwardError);
+    }
 
     return data;
   } catch (err) {

@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import profilePic from "../assets/profile.jpg";
+import { accountingService } from "../services/accountingService";
+import MainNavbar from "../components/MainNavbar";
+import BackButton from "../components/BackButton";
 
 type UserInfoRow = {
   user_id: string;
@@ -38,7 +41,7 @@ export default function ProfilePage() {
 
     const user = sessionData.session?.user;
     if (!user) {
-      navigate("/login", { replace: true });
+      navigate("/", { replace: true });
       return;
     }
 
@@ -103,6 +106,18 @@ export default function ProfilePage() {
         if (updateEmailError) throw updateEmailError;
       }
 
+      void accountingService.logActivity({
+        user_id: userInfo.auth_user_id,
+        action: "profile.updated",
+        resource: "user_information",
+        metadata: {
+          changed_email: editEmail !== userInfo.email,
+          changed_user_id: editUserId !== userInfo.user_id,
+        },
+      }).catch((logError) => {
+        console.error("Activity log failed:", logError);
+      });
+
       setSuccess(
         "อัปเดตข้อมูลสำเร็จ! (หากเปลี่ยนอีเมล กรุณาตรวจสอบลิงก์ยืนยันในอีเมลใหม่)",
       );
@@ -116,31 +131,11 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F8FAFC]">
+      <MainNavbar />
+      <BackButton onBack={() => navigate(-1)} />
+      <div className="py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
-        <div className="mb-6">
-          <button
-            onClick={() => navigate(-1)}
-            disabled={saving}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition shadow-sm disabled:opacity-50"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="w-4 h-4"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span className="text-sm font-medium">กลับ</span>
-          </button>
-        </div>
 
         <div className="bg-white rounded-[2.5rem] p-8 sm:p-12 shadow-sm border border-slate-100/50 space-y-12">
           {/* Profile Header */}
@@ -170,17 +165,17 @@ export default function ProfilePage() {
               </div>
             )}
             {success && (
-              <div className="mb-6 p-4 rounded-xl bg-[#04418b]/5 text-[#04418b] text-sm text-center border border-[#04418b]/10 animate-fade-in">
+              <div className="mb-6 rounded-xl border border-[#04418b]/10 bg-[#04418b]/5 p-4 text-center text-sm text-[#04418b]">
                 {success}
               </div>
             )}
 
             {loading ? (
               <div className="py-12 flex justify-center">
-                <div className="w-6 h-6 border-2 border-slate-200 border-t-[#04418b] rounded-full animate-spin"></div>
+                <div className="text-sm text-slate-500">Loading profile...</div>
               </div>
             ) : isEditing ? (
-              <div className="space-y-6 animate-fade-in">
+              <div className="space-y-6">
                 <div className="space-y-4">
                   <InputGroup
                     label="User ID"
@@ -201,7 +196,7 @@ export default function ProfilePage() {
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="w-full py-3.5 bg-[#04418b] text-white rounded-xl font-bold text-sm hover:bg-[#03326a] transition-all shadow-lg shadow-[#04418b]/20 active:scale-[0.98] disabled:opacity-50"
+                    className="w-full rounded-xl bg-[#04418b] py-3.5 text-sm font-bold text-white shadow-lg shadow-[#04418b]/20 disabled:opacity-50"
                   >
                     {saving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
                   </button>
@@ -216,14 +211,14 @@ export default function ProfilePage() {
                       }
                     }}
                     disabled={saving}
-                    className="w-full py-3 text-slate-400 hover:text-slate-600 font-medium text-sm transition-colors"
+                    className="w-full py-3 text-sm font-medium text-slate-400"
                   >
                     ยกเลิก
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="space-y-8 animate-fade-in">
+              <div className="space-y-8">
                 <div className="divide-y divide-slate-100">
                   <DisplayItem
                     label="User ID"
@@ -235,7 +230,7 @@ export default function ProfilePage() {
                 <div className="pt-6 flex flex-col items-center gap-8">
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-2 text-sm font-bold text-[#04418b] hover:text-[#03326a] transition-colors group"
+                    className="group flex items-center gap-2 text-sm font-bold text-[#04418b]"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -257,10 +252,10 @@ export default function ProfilePage() {
                   <button
                     onClick={async () => {
                       await supabase.auth.signOut();
-                      navigate("/login", { replace: true });
+                      navigate("/", { replace: true });
                     }}
                     disabled={saving}
-                    className="text-xs font-bold text-slate-300 hover:text-red-400 uppercase tracking-widest transition-colors"
+                    className="text-xs font-bold uppercase tracking-widest text-slate-300"
                   >
                     ออกจากระบบ
                   </button>
@@ -269,6 +264,7 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -291,7 +287,7 @@ function InputGroup({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-[#F8FAFC] border-2 border-transparent rounded-xl px-4 py-3.5 text-slate-700 font-medium text-sm focus:bg-white focus:border-[#04418b]/10 focus:ring-4 focus:ring-[#04418b]/5 outline-none transition-all placeholder:text-slate-300"
+        className="w-full bg-[#F8FAFC] border-2 border-transparent rounded-xl px-4 py-3.5 text-slate-700 font-medium text-sm focus:bg-white focus:border-[#04418b]/10 focus:ring-4 focus:ring-[#04418b]/5 outline-none placeholder:text-slate-300"
       />
     </div>
   );
@@ -307,3 +303,4 @@ function DisplayItem({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

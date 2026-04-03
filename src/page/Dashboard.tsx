@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { SECTIONS } from "../config/sections";
+import { accountingService } from "../services/accountingService";
+import MainNavbar from "../components/MainNavbar";
+import BackButton from "../components/BackButton";
 
 // Type definitions
 type RubricValue = number | null;
@@ -54,17 +57,13 @@ export default function Dashboard() {
         return;
       }
 
-      const { data: userInfo, error: userError } = await supabase
-        .from("user_information")
-        .select("role")
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
-
-      if (userError || !userInfo || userInfo.role !== "admin") {
-        alert("คุณไม่มีสิทธิเข้าถึงหน้า Dashboard เนื่องจากหน้านี้เฉพาะแอดมินเท่านั้น");
-        navigate("/form-submit", { replace: true });
-        return;
-      }
+      void accountingService.logActivity({
+        user_id: user.id,
+        action: "dashboard.viewed",
+        resource: "dashboard",
+      }).catch((logError) => {
+        console.error("Activity log failed:", logError);
+      });
 
       await fetchEvaluations();
     } catch (error) {
@@ -160,8 +159,11 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">กำลังประมวลผลข้อมูล...</div>
+      <div className="min-h-screen bg-gray-50">
+        <MainNavbar />
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-lg text-gray-600">Loading dashboard...</div>
+        </div>
       </div>
     );
   }
@@ -170,31 +172,10 @@ export default function Dashboard() {
   const activeSectionData = stats.find((s) => s.id === activeTab);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Back Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition shadow-sm"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="w-4 h-4"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span className="text-sm font-medium">กลับ</span>
-          </button>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      <MainNavbar />
+      <BackButton onBack={() => navigate(-1)} />
+      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
 
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -217,10 +198,10 @@ export default function Dashboard() {
                 <button
                   key={section.id}
                   onClick={() => setActiveTab(section.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
                     activeTab === section.id
                       ? "bg-[#04418b] text-white shadow-md"
-                      : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                      : "bg-white text-gray-600 border border-gray-200"
                   }`}
                 >
                   {section.title}
@@ -237,10 +218,10 @@ export default function Dashboard() {
             <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm w-full sm:w-auto">
               <button
                 onClick={() => setChartType("bar")}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
                   chartType === "bar"
                     ? "bg-blue-50 text-[#04418b]"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    : "text-gray-500"
                 }`}
               >
                 <svg
@@ -260,10 +241,10 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={() => setChartType("donut")}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${
                   chartType === "donut"
                     ? "bg-blue-50 text-[#04418b]"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    : "text-gray-500"
                 }`}
               >
                 <svg
@@ -518,3 +499,5 @@ function getScoreColor(score: number): string {
       return "#9AA0A6";
   }
 }
+
+
