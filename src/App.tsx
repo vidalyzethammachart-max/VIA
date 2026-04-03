@@ -9,6 +9,8 @@ import AdminDashboard from "./page/AdminDashboard";
 import RoleRequestsPage from "./page/RoleRequestsPage";
 import ForgotPassword from "./page/ForgotPassword";
 import ResetPassword from "./page/ResetPassword";
+import MyFormsDashboard from "./page/MyFormsDashboard";
+import PreviewPage from "./page/PreviewPage";
 import SessionMonitor from "./components/SessionMonitor";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -68,6 +70,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-forms"
+            element={
+              <ProtectedRoute>
+                <MyFormsDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/preview/:docId"
+            element={
+              <ProtectedRoute>
+                <PreviewPage />
               </ProtectedRoute>
             }
           />

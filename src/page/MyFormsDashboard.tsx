@@ -1,0 +1,193 @@
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
+import BackButton from "../components/BackButton";
+import MainNavbar from "../components/MainNavbar";
+import { supabase } from "../lib/supabaseClient";
+
+type EvaluationItem = {
+  id: number;
+  user_id: string | null;
+  order_number: string | null;
+  subject_name: string | null;
+  overall_suggestion: string | null;
+  google_doc_id: string | null;
+  created_at: string;
+};
+
+function formatDate(dateString: string) {
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(dateString));
+}
+
+export default function MyFormsDashboard() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<EvaluationItem[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadMyForms();
+  }, []);
+
+  const loadMyForms = async () => {
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("evaluations")
+        .select("id, user_id, order_number, subject_name, overall_suggestion, google_doc_id, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setItems((data ?? []) as EvaluationItem[]);
+    } catch (error) {
+      console.error("Failed to load my forms:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load forms.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completedPreviewCount = items.filter((item) => Boolean(item.google_doc_id)).length;
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <MainNavbar
+        title="My Forms Dashboard"
+        subtitle="Track how many evaluation forms you have submitted and preview linked documents."
+      />
+      <BackButton onBack={() => navigate(-1)} />
+
+      <main className="mx-auto max-w-6xl px-4 py-6 md:py-8">
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Total forms
+            </p>
+            <p className="mt-3 text-4xl font-bold text-slate-900">{items.length}</p>
+            <p className="mt-2 text-sm text-slate-500">Forms submitted by your account.</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Ready to preview
+            </p>
+            <p className="mt-3 text-4xl font-bold text-[#04418b]">{completedPreviewCount}</p>
+            <p className="mt-2 text-sm text-slate-500">Entries that already have a Google Doc ID.</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Quick action
+            </p>
+            <Link
+              to="/form-submit"
+              className="mt-3 inline-flex rounded-xl bg-[#04418b] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#03326a]"
+            >
+              Submit new form
+            </Link>
+            <p className="mt-2 text-sm text-slate-500">Create another evaluation submission.</p>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <h2 className="text-lg font-semibold text-slate-900">My submissions</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Each row is one evaluation form submitted by your account.
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="px-5 py-12 text-center text-sm text-slate-500">
+              Loading your forms...
+            </div>
+          ) : errorMessage ? (
+            <div className="px-5 py-12 text-center text-sm text-red-600">{errorMessage}</div>
+          ) : items.length === 0 ? (
+            <div className="px-5 py-12 text-center text-sm text-slate-500">
+              You have not submitted any forms yet.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-200">
+              {items.map((item) => (
+                <article
+                  key={item.id}
+                  className="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-start md:justify-between"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-semibold text-slate-900">
+                        {item.subject_name || "Untitled submission"}
+                      </h3>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                        #{item.order_number || "-"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">{formatDate(item.created_at)}</p>
+                    <p className="mt-3 line-clamp-2 text-sm text-slate-600">
+                      {item.overall_suggestion?.trim() || "No overall suggestion provided."}
+                    </p>
+                    {item.google_doc_id ? (
+                      <p className="mt-3 break-all text-xs text-slate-400">
+                        Doc ID: {item.google_doc_id}
+                      </p>
+                    ) : (
+                      <p className="mt-3 text-xs font-medium text-amber-600">
+                        Preview unavailable: this submission does not have a stored Google Doc ID yet.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                    {item.google_doc_id ? (
+                      <>
+                        <Link
+                          to={`/preview/${item.google_doc_id}`}
+                          className="rounded-xl bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#03326a]"
+                        >
+                          Preview
+                        </Link>
+                        <a
+                          href={`https://docs.google.com/document/d/${item.google_doc_id}/edit`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          Open Doc
+                        </a>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400"
+                      >
+                        Preview pending
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}

@@ -88,6 +88,14 @@ export default function ProfileDropdown() {
                 Evaluation Dashboard
               </button>
             </li>
+            <li>
+              <button
+                onClick={() => navigate("/my-forms")}
+                className="w-full px-4 py-2 text-left hover:bg-gray-100"
+              >
+                My Forms
+              </button>
+            </li>
             {canAccessFormSubmit && (
               <li>
                 <button

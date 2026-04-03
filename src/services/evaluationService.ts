@@ -1,8 +1,6 @@
-// src/services/evaluationService.ts
 import { supabase } from "../lib/supabaseClient";
 import { accountingService } from "./accountingService";
 
-// รูปแบบ rubric ที่ส่งมาจากฟอร์ม
 export type RubricPayload = {
   [sectionId: string]: {
     [questionId: string]: number | null;
@@ -16,7 +14,12 @@ export interface EvaluationPayload {
   overall_suggestion?: string | null;
   rubric: RubricPayload;
   Email?: string | null;
+  google_doc_id?: string | null;
 }
+
+type ForwardPayload = EvaluationPayload & {
+  evaluation_id?: number;
+};
 
 export type RubricValue = number | null;
 
@@ -26,20 +29,33 @@ export type Rubric = {
   };
 };
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
 
-/**
- * บันทึกผลประเมินลงตาราง evaluations
- */
+  if (typeof error === "object" && error !== null) {
+    const maybeMessage = Reflect.get(error, "message");
+    if (typeof maybeMessage === "string" && maybeMessage) {
+      return maybeMessage;
+    }
+  }
+
+  return String(error);
+}
+
 export async function submitEvaluation(payload: EvaluationPayload) {
   try {
     const { data, error } = await supabase
       .from("evaluations")
       .insert([
         {
+          user_id: payload.user_id ?? null,
           order_number: payload.order_number ?? null,
           subject_name: payload.subject_name,
           overall_suggestion: payload.overall_suggestion ?? null,
-          rubric: payload.rubric, // jsonb
+          rubric: payload.rubric,
+          google_doc_id: payload.google_doc_id ?? null,
         },
       ])
       .select("*")
@@ -51,25 +67,33 @@ export async function submitEvaluation(payload: EvaluationPayload) {
     }
 
     if (payload.user_id) {
-      void accountingService.logActivity({
-        user_id: payload.user_id,
-        action: "evaluation.submitted",
-        resource: "evaluations",
-        metadata: {
-          evaluation_id: data?.id,
-          order_number: payload.order_number ?? null,
-        },
-      }).catch((logError) => {
-        console.error("Activity log failed:", logError);
-      });
+      void accountingService
+        .logActivity({
+          user_id: payload.user_id,
+          action: "evaluation.submitted",
+          resource: "evaluations",
+          metadata: {
+            evaluation_id: data?.id,
+            order_number: payload.order_number ?? null,
+          },
+        })
+        .catch((logError) => {
+          console.error("Activity log failed:", logError);
+        });
     }
 
-    // ส่งต่อไป n8n ผ่าน Supabase Edge Function (ไม่เปิดเผย webhook ใน frontend)
+    const forwardPayload: ForwardPayload = {
+      ...payload,
+      evaluation_id: data?.id,
+    };
+
     const { error: forwardError } = await supabase.functions.invoke("forward-to-n8n", {
-      body: payload,
+      body: forwardPayload,
     });
+
     if (forwardError) {
       console.error("Edge function forwarding failed:", forwardError);
+      throw new Error(`forward-to-n8n failed: ${getErrorMessage(forwardError)}`);
     }
 
     return data;

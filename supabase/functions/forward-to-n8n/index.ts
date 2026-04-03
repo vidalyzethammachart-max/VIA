@@ -18,6 +18,11 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  console.log("[forward-to-n8n] request received", {
+    method: req.method,
+    hasWebhookUrl: Boolean(WEBHOOK_URL),
+  });
+
   try {
     const authHeader = req.headers.get("Authorization");
     const jwt = authHeader?.startsWith("Bearer ")
@@ -25,6 +30,7 @@ serve(async (req) => {
       : null;
 
     if (!jwt) {
+      console.error("[forward-to-n8n] missing bearer token");
       return new Response(
         JSON.stringify({ ok: false, error: "Missing bearer token" }),
         {
@@ -43,6 +49,9 @@ serve(async (req) => {
     } = await supabase.auth.getUser(jwt);
 
     if (authError || !user) {
+      console.error("[forward-to-n8n] auth failed", {
+        authError: authError?.message ?? null,
+      });
       return new Response(
         JSON.stringify({ ok: false, error: "Unauthorized" }),
         {
@@ -55,11 +64,19 @@ serve(async (req) => {
       );
     }
 
+    console.log("[forward-to-n8n] user authenticated", { userId: user.id });
+
     const payload = await req.json();
     const securedPayload = {
       ...payload,
       actor_user_id: user.id,
     };
+
+    console.log("[forward-to-n8n] forwarding payload", {
+      subjectName: payload?.subject_name ?? null,
+      orderNumber: payload?.order_number ?? null,
+      hasEmail: Boolean(payload?.Email),
+    });
 
     const res = await fetch(WEBHOOK_URL, {
       method: "POST",
@@ -67,8 +84,17 @@ serve(async (req) => {
       body: JSON.stringify(securedPayload),
     });
 
+    console.log("[forward-to-n8n] n8n response received", {
+      status: res.status,
+      ok: res.ok,
+    });
+
     if (!res.ok) {
       const text = await res.text();
+      console.error("[forward-to-n8n] n8n returned non-2xx", {
+        status: res.status,
+        body: text,
+      });
       return new Response(
         JSON.stringify({ ok: false, error: text }),
         {
@@ -80,6 +106,12 @@ serve(async (req) => {
         },
       );
     }
+
+    const successText = await res.text();
+    console.log("[forward-to-n8n] success", {
+      status: res.status,
+      bodyPreview: successText.slice(0, 300),
+    });
 
     return new Response(
       JSON.stringify({ ok: true }),
@@ -93,6 +125,10 @@ serve(async (req) => {
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error("[forward-to-n8n] unhandled error", {
+      message,
+      stack: err instanceof Error ? err.stack ?? null : null,
+    });
 
     return new Response(
       JSON.stringify({ ok: false, error: message }),
