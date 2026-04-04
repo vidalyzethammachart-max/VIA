@@ -31,6 +31,9 @@ export type Rubric = {
 export type EvaluationSubmissionResult = {
   id: number;
   google_doc_id: string | null;
+  source_doc_id?: string | null;
+  pdf_storage_path?: string | null;
+  docx_storage_path?: string | null;
   document_status: "pending" | "ready" | "failed";
   document_error: string | null;
 };
@@ -129,6 +132,8 @@ export async function submitEvaluation(
       status?: "pending" | "ready" | "failed";
       evaluationId?: number | null;
       docId?: string;
+      pdfPath?: string | null;
+      docxPath?: string | null;
       message?: string;
       error?: string;
     }>("forward-to-n8n", {
@@ -162,6 +167,9 @@ export async function submitEvaluation(
       return {
         id: data.id,
         google_doc_id: functionData.docId,
+        source_doc_id: functionData.docId,
+        pdf_storage_path: functionData.pdfPath ?? null,
+        docx_storage_path: functionData.docxPath ?? null,
         document_status: "ready",
         document_error: null,
       };
@@ -184,6 +192,9 @@ export async function submitEvaluation(
     return {
       id: data.id,
       google_doc_id: null,
+      source_doc_id: null,
+      pdf_storage_path: null,
+      docx_storage_path: null,
       document_status: functionData.status ?? "pending",
       document_error: null,
     };

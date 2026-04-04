@@ -162,7 +162,7 @@ function FormSubmit() {
 
       <main className="mx-auto max-w-5xl px-4 py-6 md:py-8">
         {userRole === "user" && (
-          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
+          <section className="ui-hover-card mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <h2 className="text-sm font-semibold text-slate-900">Need editor access?</h2>
             <p className="mt-1 text-xs text-slate-500">
               Submit a role request and wait for admin approval before using the form.
@@ -172,13 +172,13 @@ function FormSubmit() {
                 type="button"
                 onClick={handleRequestEditorRole}
                 disabled={isRequestingRole}
-                className="rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="ui-hover-button rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {isRequestingRole ? "Submitting..." : "Request Editor Role"}
               </button>
               <Link
                 to="/role-requests"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+                className="ui-hover-button rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
                 View Requests
               </Link>
@@ -190,7 +190,7 @@ function FormSubmit() {
         )}
 
         {userRole !== "user" && (
-          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
+          <section className="ui-hover-card mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">Submission workspace</h2>
@@ -201,7 +201,7 @@ function FormSubmit() {
               </div>
               <Link
                 to="/my-forms"
-                className="rounded-lg bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white hover:bg-[#03326a]"
+                className="ui-hover-button rounded-lg bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white hover:bg-[#03326a]"
               >
                 Go to My Forms
               </Link>
@@ -210,7 +210,7 @@ function FormSubmit() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <section className="ui-hover-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end">
               <div className="space-y-1 md:w-40">
                 <label className="text-xs font-medium text-slate-700">Order number</label>
@@ -234,7 +234,7 @@ function FormSubmit() {
             </div>
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <section className="ui-hover-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-slate-900 md:text-base">
                 Evaluation rubric
@@ -273,7 +273,7 @@ function FormSubmit() {
             ))}
           </section>
 
-          <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <section className="ui-hover-card space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <label className="text-sm font-semibold text-slate-800">Overall suggestion</label>
             <p className="text-xs text-slate-500">
               Provide summary notes, highlights, risks, and any recommended improvements.
@@ -297,7 +297,7 @@ function FormSubmit() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-full bg-primary px-6 py-2 text-base font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-60 hover:bg-primary/90"
+                className="ui-hover-button rounded-full bg-primary px-6 py-2 text-base font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-60 hover:bg-primary/90"
               >
                 {isSaving ? "Generating document..." : "Submit Evaluation"}
               </button>

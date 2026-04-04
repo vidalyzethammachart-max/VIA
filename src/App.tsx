@@ -30,7 +30,7 @@ export default function App() {
   if (loading) return <p>Loading...</p>;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
       {session && <SessionMonitor />}
 
       <div className="flex-grow">

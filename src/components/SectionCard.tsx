@@ -16,7 +16,7 @@ const RATING_HEADERS: { value: LikertValue; label: string }[] = [
 
 export function SectionCard({ section, answers, onToggle }: Props) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-6 space-y-4">
+    <div className="ui-hover-card bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-6 space-y-4">
       {/* หัวหมวด */}
       <div className="space-y-1">
         <div className="inline-flex items-center gap-2">

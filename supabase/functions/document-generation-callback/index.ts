@@ -14,27 +14,36 @@ const corsHeaders = {
 const adminSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 type CallbackPayload = {
-  evaluation_id?: number;
+  evaluation_id?: number | string;
   docId?: string;
   doc_id?: string;
   googleDocId?: string;
   google_doc_id?: string;
+  source_doc_id?: string;
+  pdf_path?: string;
+  pdf_storage_path?: string;
+  docx_path?: string;
+  docx_storage_path?: string;
   error?: string | null;
   status?: "ready" | "failed" | null;
 };
 
-function extractDocId(payload: CallbackPayload): string | null {
-  const value =
-    payload.docId ??
-    payload.doc_id ??
-    payload.googleDocId ??
-    payload.google_doc_id;
-
-  if (typeof value === "string" && value.trim()) {
-    return value.trim();
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
   }
 
-  return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function extractDocId(payload: CallbackPayload): string | null {
+  return normalizeOptionalString(
+    payload.docId ??
+      payload.doc_id ??
+      payload.googleDocId ??
+      payload.google_doc_id,
+  );
 }
 
 serve(async (req) => {
@@ -69,7 +78,7 @@ serve(async (req) => {
 
   try {
     const payload = (await req.json()) as CallbackPayload;
-    const evaluationId = payload.evaluation_id;
+    const evaluationId = Number(payload.evaluation_id);
 
     if (!evaluationId || !Number.isInteger(evaluationId)) {
       return new Response(JSON.stringify({ ok: false, error: "evaluation_id is required" }), {
@@ -82,6 +91,9 @@ serve(async (req) => {
     }
 
     const docId = extractDocId(payload);
+    const pdfPath = normalizeOptionalString(payload.pdf_storage_path ?? payload.pdf_path);
+    const docxPath = normalizeOptionalString(payload.docx_storage_path ?? payload.docx_path);
+    const sourceDocId = normalizeOptionalString(payload.source_doc_id);
     const isFailed = payload.status === "failed" || (!docId && Boolean(payload.error));
 
     const updateValues = isFailed
@@ -89,15 +101,21 @@ serve(async (req) => {
           document_status: "failed",
           document_error: payload.error?.trim() || "Document generation failed.",
           google_doc_id: null,
+          source_doc_id: null,
+          pdf_storage_path: null,
+          docx_storage_path: null,
         }
       : {
           document_status: "ready",
           document_error: null,
           google_doc_id: docId,
+          source_doc_id: sourceDocId,
+          pdf_storage_path: pdfPath,
+          docx_storage_path: docxPath,
         };
 
-    if (!isFailed && !docId) {
-      return new Response(JSON.stringify({ ok: false, error: "docId is required for ready status" }), {
+    if (!isFailed && !docId && !pdfPath && !docxPath) {
+      return new Response(JSON.stringify({ ok: false, error: "At least one document artifact is required for ready status" }), {
         status: 400,
         headers: {
           ...corsHeaders,
@@ -127,6 +145,9 @@ serve(async (req) => {
         evaluationId,
         status: updateValues.document_status,
         docId: docId ?? null,
+        sourceDocId,
+        pdfPath,
+        docxPath,
       }),
       {
         status: 200,

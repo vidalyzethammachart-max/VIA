@@ -46,39 +46,6 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<string>(SECTIONS[0]?.id || "1"); // Default to section 1
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
 
-  useEffect(() => {
-    if (!role) {
-      return;
-    }
-
-    const run = async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const user = sessionData.session?.user;
-
-        if (!user) {
-          navigate("/", { replace: true });
-          return;
-        }
-
-        void accountingService.logActivity({
-          user_id: user.id,
-          action: "dashboard.viewed",
-          resource: "dashboard",
-        }).catch((logError) => {
-          console.error("Activity log failed:", logError);
-        });
-
-        await fetchEvaluations();
-      } catch (error) {
-        console.error("Access check failed", error);
-        navigate("/form-submit", { replace: true });
-      }
-    };
-
-    void run();
-  }, [fetchEvaluations, navigate, role]);
-
   const fetchEvaluations = useCallback(async () => {
     try {
       const {
@@ -111,6 +78,39 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, [navigate, role]);
+
+  useEffect(() => {
+    if (!role) {
+      return;
+    }
+
+    const run = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+
+        if (!user) {
+          navigate("/", { replace: true });
+          return;
+        }
+
+        void accountingService.logActivity({
+          user_id: user.id,
+          action: "dashboard.viewed",
+          resource: "dashboard",
+        }).catch((logError) => {
+          console.error("Activity log failed:", logError);
+        });
+
+        await fetchEvaluations();
+      } catch (error) {
+        console.error("Access check failed", error);
+        navigate("/form-submit", { replace: true });
+      }
+    };
+
+    void run();
+  }, [fetchEvaluations, navigate, role]);
 
   const processStats = (evaluations: EvaluationRow[]) => {
     setTotalResponses(evaluations.length);
@@ -220,7 +220,7 @@ export default function Dashboard() {
                 <button
                   key={section.id}
                   onClick={() => setActiveTab(section.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+                  className={`ui-hover-button px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
                     activeTab === section.id
                       ? "bg-[#04418b] text-white shadow-md"
                       : "bg-white text-gray-600 border border-gray-200"
@@ -310,7 +310,7 @@ export default function Dashboard() {
               {activeSectionData.questions.map((q, idx) => (
                 <div
                   key={idx}
-                  className="border-b border-gray-100 last:border-0 pb-8 last:pb-0"
+                  className="border-b border-slate-300 last:border-0 pb-8 last:pb-0"
                 >
                   <div className="flex flex-col md:flex-row gap-8">
                     {/* Left: Chart */}
@@ -450,7 +450,7 @@ export default function Dashboard() {
                     </div>
 
                     {/* Right: Score Summary */}
-                    <div className="md:w-64 flex-shrink-0 flex flex-col items-center justify-center bg-gray-50 rounded-xl p-6 border border-gray-100">
+                    <div className="md:w-64 flex-shrink-0 flex flex-col items-center justify-center bg-white rounded-xl p-6 border border-slate-300">
                       <span className="text-gray-500 text-sm font-medium text-center mb-1">
                         คะแนนเฉลี่ย
                       </span>
@@ -460,7 +460,7 @@ export default function Dashboard() {
                       <span className="text-gray-400 text-xs">
                         จากเต็ม 5 คะแนน
                       </span>
-                      <div className="mt-4 w-full h-px bg-gray-200"></div>
+                      <div className="mt-4 w-full h-px bg-slate-300"></div>
                       <div className="mt-4 flex flex-col items-center">
                         <span className="text-2xl font-bold text-gray-700">
                           {q.count}

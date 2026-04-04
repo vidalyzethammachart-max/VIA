@@ -375,3 +375,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/document-generation-callback/deno.json"
 entrypoint = "./functions/document-generation-callback/index.ts"
+
+[functions.document-artifact-url]
+enabled = true
+verify_jwt = true
+import_map = "./functions/document-artifact-url/deno.json"
+entrypoint = "./functions/document-artifact-url/index.ts"

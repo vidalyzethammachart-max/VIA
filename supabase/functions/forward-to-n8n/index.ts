@@ -5,6 +5,7 @@ const WEBHOOK_URL = Deno.env.get("N8N_WEBHOOK_URL")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const DOCUMENTS_BUCKET = Deno.env.get("DOCUMENTS_BUCKET") || "evaluation-documents";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,6 +143,7 @@ serve(async (req) => {
       ...payload,
       actor_user_id: user.id,
       callback_url: `${SUPABASE_URL}/functions/v1/document-generation-callback`,
+      documents_bucket: DOCUMENTS_BUCKET,
     };
 
     console.log("[forward-to-n8n] forwarding payload", {
