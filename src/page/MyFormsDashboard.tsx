@@ -12,6 +12,8 @@ type EvaluationItem = {
   subject_name: string | null;
   overall_suggestion: string | null;
   google_doc_id: string | null;
+  document_status: "pending" | "ready" | "failed";
+  document_error: string | null;
   created_at: string;
 };
 
@@ -46,7 +48,7 @@ export default function MyFormsDashboard() {
 
       const { data, error } = await supabase
         .from("evaluations")
-        .select("id, user_id, order_number, subject_name, overall_suggestion, google_doc_id, created_at")
+        .select("id, user_id, order_number, subject_name, overall_suggestion, google_doc_id, document_status, document_error, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -63,7 +65,7 @@ export default function MyFormsDashboard() {
     }
   };
 
-  const completedPreviewCount = items.filter((item) => Boolean(item.google_doc_id)).length;
+  const completedPreviewCount = items.filter((item) => item.document_status === "ready").length;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -143,22 +145,26 @@ export default function MyFormsDashboard() {
                     <p className="mt-3 line-clamp-2 text-sm text-slate-600">
                       {item.overall_suggestion?.trim() || "No overall suggestion provided."}
                     </p>
-                    {item.google_doc_id ? (
+                    {item.document_status === "ready" && item.google_doc_id ? (
                       <p className="mt-3 break-all text-xs text-slate-400">
                         Doc ID: {item.google_doc_id}
                       </p>
+                    ) : item.document_status === "failed" ? (
+                      <p className="mt-3 text-xs font-medium text-red-600">
+                        Generation failed: {item.document_error || "No error details were stored."}
+                      </p>
                     ) : (
                       <p className="mt-3 text-xs font-medium text-amber-600">
-                        Preview unavailable: this submission does not have a stored Google Doc ID yet.
+                        Preview pending: the generated Google Doc is still being processed.
                       </p>
                     )}
                   </div>
 
                   <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                    {item.google_doc_id ? (
+                    {item.document_status === "ready" && item.google_doc_id ? (
                       <>
                         <Link
-                          to={`/preview/${item.google_doc_id}`}
+                          to={`/preview/${item.id}`}
                           className="rounded-xl bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#03326a]"
                         >
                           Preview
@@ -172,14 +178,20 @@ export default function MyFormsDashboard() {
                           Open Doc
                         </a>
                       </>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400"
+                    ) : item.document_status === "failed" ? (
+                      <Link
+                        to={`/preview/${item.id}`}
+                        className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-center text-sm font-semibold text-red-700 transition hover:bg-red-100"
                       >
-                        Preview pending
-                      </button>
+                        View Error
+                      </Link>
+                    ) : (
+                      <Link
+                        to={`/preview/${item.id}`}
+                        className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                      >
+                        Track Status
+                      </Link>
                     )}
                   </div>
                 </article>

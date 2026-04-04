@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const WEBHOOK_URL = Deno.env.get("N8N_WEBHOOK_URL")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,10 +13,80 @@ const corsHeaders = {
 };
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const adminSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+type ForwardPayload = {
+  evaluation_id?: number;
+  subject_name?: string | null;
+  order_number?: string | null;
+  Email?: string | null;
+};
+
+function extractDocId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const direct =
+    record.docId ??
+    record.doc_id ??
+    record.googleDocId ??
+    record.google_doc_id;
+
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+
+  const nested = record.data;
+  if (nested && typeof nested === "object") {
+    return extractDocId(nested);
+  }
+
+  return null;
+}
+
+async function updateEvaluationDocument(
+  evaluationId: number | undefined,
+  values: {
+    google_doc_id?: string | null;
+    document_status: "ready" | "failed";
+    document_error?: string | null;
+  },
+) {
+  if (!evaluationId) {
+    return;
+  }
+
+  const { error } = await adminSupabase
+    .from("evaluations")
+    .update(values)
+    .eq("id", evaluationId);
+
+  if (error) {
+    console.error("[forward-to-n8n] failed to update evaluation document state", {
+      evaluationId,
+      error: error.message,
+    });
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Method not allowed" }),
+      {
+        status: 405,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      },
+    );
   }
 
   console.log("[forward-to-n8n] request received", {
@@ -66,10 +137,11 @@ serve(async (req) => {
 
     console.log("[forward-to-n8n] user authenticated", { userId: user.id });
 
-    const payload = await req.json();
+    const payload = (await req.json()) as ForwardPayload;
     const securedPayload = {
       ...payload,
       actor_user_id: user.id,
+      callback_url: `${SUPABASE_URL}/functions/v1/document-generation-callback`,
     };
 
     console.log("[forward-to-n8n] forwarding payload", {
@@ -91,6 +163,10 @@ serve(async (req) => {
 
     if (!res.ok) {
       const text = await res.text();
+      await updateEvaluationDocument(payload.evaluation_id, {
+        document_status: "failed",
+        document_error: text.slice(0, 1000),
+      });
       console.error("[forward-to-n8n] n8n returned non-2xx", {
         status: res.status,
         body: text,
@@ -108,13 +184,52 @@ serve(async (req) => {
     }
 
     const successText = await res.text();
+    let parsedBody: unknown = null;
+
+    try {
+      parsedBody = successText ? JSON.parse(successText) : null;
+    } catch {
+      parsedBody = { raw: successText };
+    }
+
+    const docId = extractDocId(parsedBody);
+    if (!docId) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          status: "pending",
+          evaluationId: payload.evaluation_id ?? null,
+          message: "Workflow accepted. Waiting for async callback.",
+        }),
+        {
+          status: 202,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
+    await updateEvaluationDocument(payload.evaluation_id, {
+      google_doc_id: docId,
+      document_status: "ready",
+      document_error: null,
+    });
+
     console.log("[forward-to-n8n] success", {
       status: res.status,
+      docId,
       bodyPreview: successText.slice(0, 300),
     });
 
     return new Response(
-      JSON.stringify({ ok: true }),
+      JSON.stringify({
+        ok: true,
+        status: "ready",
+        evaluationId: payload.evaluation_id ?? null,
+        docId,
+      }),
       {
         status: 200,
         headers: {

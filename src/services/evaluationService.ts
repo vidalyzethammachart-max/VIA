@@ -8,17 +8,16 @@ export type RubricPayload = {
 };
 
 export interface EvaluationPayload {
-  user_id?: string;
+  user_id: string;
   order_number?: string | null;
   subject_name: string;
   overall_suggestion?: string | null;
   rubric: RubricPayload;
   Email?: string | null;
-  google_doc_id?: string | null;
 }
 
 type ForwardPayload = EvaluationPayload & {
-  evaluation_id?: number;
+  evaluation_id: number;
 };
 
 export type RubricValue = number | null;
@@ -29,7 +28,43 @@ export type Rubric = {
   };
 };
 
-function getErrorMessage(error: unknown): string {
+export type EvaluationSubmissionResult = {
+  id: number;
+  google_doc_id: string | null;
+  document_status: "pending" | "ready" | "failed";
+  document_error: string | null;
+};
+
+async function getErrorMessage(error: unknown): Promise<string> {
+  const context = typeof error === "object" && error !== null
+    ? Reflect.get(error, "context")
+    : null;
+
+  if (context instanceof Response) {
+    try {
+      const payload = await context.clone().json();
+      const responseError =
+        typeof payload === "object" && payload !== null
+          ? Reflect.get(payload, "error")
+          : null;
+
+      if (typeof responseError === "string" && responseError) {
+        return responseError;
+      }
+
+      return JSON.stringify(payload);
+    } catch {
+      try {
+        const text = await context.clone().text();
+        if (text) {
+          return text;
+        }
+      } catch {
+        // Fall through to generic handling.
+      }
+    }
+  }
+
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -44,21 +79,25 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-export async function submitEvaluation(payload: EvaluationPayload) {
+export async function submitEvaluation(
+  payload: EvaluationPayload,
+): Promise<EvaluationSubmissionResult> {
   try {
     const { data, error } = await supabase
       .from("evaluations")
       .insert([
         {
-          user_id: payload.user_id ?? null,
+          user_id: payload.user_id,
           order_number: payload.order_number ?? null,
           subject_name: payload.subject_name,
           overall_suggestion: payload.overall_suggestion ?? null,
           rubric: payload.rubric,
-          google_doc_id: payload.google_doc_id ?? null,
+          google_doc_id: null,
+          document_status: "pending",
+          document_error: null,
         },
       ])
-      .select("*")
+      .select("id, google_doc_id, document_status, document_error")
       .single();
 
     if (error) {
@@ -66,37 +105,88 @@ export async function submitEvaluation(payload: EvaluationPayload) {
       throw error;
     }
 
-    if (payload.user_id) {
-      void accountingService
-        .logActivity({
-          user_id: payload.user_id,
-          action: "evaluation.submitted",
-          resource: "evaluations",
-          metadata: {
-            evaluation_id: data?.id,
-            order_number: payload.order_number ?? null,
-          },
-        })
-        .catch((logError) => {
-          console.error("Activity log failed:", logError);
-        });
-    }
+    void accountingService
+      .logActivity({
+        user_id: payload.user_id,
+        action: "evaluation.submitted",
+        resource: "evaluations",
+        metadata: {
+          evaluation_id: data?.id,
+          order_number: payload.order_number ?? null,
+        },
+      })
+      .catch((logError) => {
+        console.error("Activity log failed:", logError);
+      });
 
     const forwardPayload: ForwardPayload = {
       ...payload,
-      evaluation_id: data?.id,
+      evaluation_id: data.id,
     };
 
-    const { error: forwardError } = await supabase.functions.invoke("forward-to-n8n", {
+    const { data: functionData, error: forwardError } = await supabase.functions.invoke<{
+      ok: boolean;
+      status?: "pending" | "ready" | "failed";
+      evaluationId?: number | null;
+      docId?: string;
+      message?: string;
+      error?: string;
+    }>("forward-to-n8n", {
       body: forwardPayload,
     });
 
     if (forwardError) {
       console.error("Edge function forwarding failed:", forwardError);
-      throw new Error(`forward-to-n8n failed: ${getErrorMessage(forwardError)}`);
+      throw new Error(`forward-to-n8n failed: ${await getErrorMessage(forwardError)}`);
     }
 
-    return data;
+    if (!functionData?.ok) {
+      throw new Error(functionData?.error || "Document generation request failed.");
+    }
+
+    if (functionData.status === "ready" && functionData.docId) {
+      void accountingService
+        .logActivity({
+          user_id: payload.user_id,
+          action: "GENERATE_DOCUMENT",
+          resource: "evaluations",
+          metadata: {
+            evaluation_id: data.id,
+            google_doc_id: functionData.docId,
+          },
+        })
+        .catch((logError) => {
+          console.error("Activity log failed:", logError);
+        });
+
+      return {
+        id: data.id,
+        google_doc_id: functionData.docId,
+        document_status: "ready",
+        document_error: null,
+      };
+    }
+
+    void accountingService
+      .logActivity({
+        user_id: payload.user_id,
+        action: "GENERATE_DOCUMENT_REQUESTED",
+        resource: "evaluations",
+        metadata: {
+          evaluation_id: data.id,
+          status: functionData.status ?? "pending",
+        },
+      })
+      .catch((logError) => {
+        console.error("Activity log failed:", logError);
+      });
+
+    return {
+      id: data.id,
+      google_doc_id: null,
+      document_status: functionData.status ?? "pending",
+      document_error: null,
+    };
   } catch (err) {
     console.error("Error saving evaluation:", err);
     throw err;

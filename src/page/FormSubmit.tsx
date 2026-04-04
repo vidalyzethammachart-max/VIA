@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import MainNavbar from "../components/MainNavbar";
 import { SectionCard } from "../components/SectionCard";
@@ -14,6 +14,7 @@ import {
 } from "../services/evaluationService";
 
 function FormSubmit() {
+  const navigate = useNavigate();
   const [orderNumber, setOrderNumber] = useState("");
   const [subjectName, setSubjectName] = useState("");
   const [answers, setAnswers] = useState<
@@ -23,7 +24,6 @@ function FormSubmit() {
   const [isSaving, setIsSaving] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<AppRole>("user");
   const [isRequestingRole, setIsRequestingRole] = useState(false);
@@ -50,18 +50,18 @@ function FormSubmit() {
   }, []);
 
   const handleToggleAnswer = (
-    sectionTitle: string,
+    sectionId: string,
     questionLabel: string,
     value: LikertValue,
   ) => {
     setAnswers((prev) => {
-      const sectionAnswers = prev[sectionTitle] || {};
+      const sectionAnswers = prev[sectionId] || {};
       const current = sectionAnswers[questionLabel];
       const nextValue = current === value ? undefined : value;
 
       return {
         ...prev,
-        [sectionTitle]: {
+        [sectionId]: {
           ...sectionAnswers,
           [questionLabel]: nextValue,
         },
@@ -85,14 +85,27 @@ function FormSubmit() {
     return rubric;
   };
 
-  const buildPayload = (): EvaluationPayload => ({
-    user_id: authUserId ?? undefined,
-    order_number: orderNumber.trim() || "ไม่ระบุลำดับ",
-    subject_name: subjectName.trim() || "ไม่ระบุชื่อวิชา",
-    overall_suggestion: comment.trim(),
-    rubric: buildRubric(),
-    Email: userEmail || undefined,
-  });
+  const buildPayload = (): EvaluationPayload | null => {
+    if (!authUserId) {
+      return null;
+    }
+
+    return {
+      user_id: authUserId,
+      order_number: orderNumber.trim() || "Unspecified",
+      subject_name: subjectName.trim() || "Untitled subject",
+      overall_suggestion: comment.trim(),
+      rubric: buildRubric(),
+      Email: userEmail || undefined,
+    };
+  };
+
+  const resetForm = () => {
+    setOrderNumber("");
+    setSubjectName("");
+    setAnswers({});
+    setComment("");
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -100,21 +113,23 @@ function FormSubmit() {
     setSubmitErrorMessage(null);
 
     const payload = buildPayload();
+    if (!payload) {
+      setSubmitErrorMessage("Your session is not ready. Please sign in again and retry.");
+      setIsSaving(false);
+      return;
+    }
 
     try {
-      await submitEvaluation(payload);
-
-      setShowSuccessModal(true);
-      setOrderNumber("");
-      setSubjectName("");
-      setAnswers({});
-      setComment("");
+      const result = await submitEvaluation(payload);
+      resetForm();
+      navigate(`/preview/${result.id}`, {
+        replace: true,
+        state: { generated: true },
+      });
     } catch (error) {
       console.error("Error while saving:", error);
       setSubmitErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "เกิดข้อผิดพลาดขณะบันทึกข้อมูล",
+        error instanceof Error ? error.message : "Failed to submit the evaluation.",
       );
     } finally {
       setIsSaving(false);
@@ -122,17 +137,20 @@ function FormSubmit() {
   };
 
   const handleRequestEditorRole = async () => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      return;
+    }
 
     setIsRequestingRole(true);
     setRoleRequestMessage(null);
+
     try {
       await roleRequestService.requestRole("editor");
       setRoleRequestMessage("Role request submitted. Please wait for admin review.");
     } catch (requestError: unknown) {
-      const message =
-        requestError instanceof Error ? requestError.message : "Failed to request role.";
-      setRoleRequestMessage(message);
+      setRoleRequestMessage(
+        requestError instanceof Error ? requestError.message : "Failed to request role.",
+      );
     } finally {
       setIsRequestingRole(false);
     }
@@ -147,28 +165,22 @@ function FormSubmit() {
           <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <h2 className="text-sm font-semibold text-slate-900">Need editor access?</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Submit a role request and admin will review it.
+              Submit a role request and wait for admin approval before using the form.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
               <button
                 type="button"
                 onClick={handleRequestEditorRole}
                 disabled={isRequestingRole}
-                className="rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#03326a] motion-safe:active:scale-[0.98]"
+                className="rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {isRequestingRole ? "Submitting..." : "Request Editor Role"}
               </button>
               <Link
                 to="/role-requests"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-slate-100 motion-safe:active:scale-[0.98]"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
                 View Requests
-              </Link>
-              <Link
-                to="/my-forms"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-slate-100 motion-safe:active:scale-[0.98]"
-              >
-                My Forms
               </Link>
             </div>
             {roleRequestMessage && (
@@ -181,14 +193,15 @@ function FormSubmit() {
           <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Need to review your previous forms?</h2>
+                <h2 className="text-sm font-semibold text-slate-900">Submission workspace</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Open your personal forms dashboard to see how many submissions you have made.
+                  Completed documents are stored on each evaluation and can be reopened from your
+                  forms dashboard.
                 </p>
               </div>
               <Link
                 to="/my-forms"
-                className="rounded-lg bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#03326a] motion-safe:active:scale-[0.98]"
+                className="rounded-lg bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white hover:bg-[#03326a]"
               >
                 Go to My Forms
               </Link>
@@ -199,22 +212,22 @@ function FormSubmit() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end">
-              <div className="space-y-1 md:w-32">
-                <label className="text-xs font-medium text-slate-700">หมายเลขวิชา</label>
+              <div className="space-y-1 md:w-40">
+                <label className="text-xs font-medium text-slate-700">Order number</label>
                 <input
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
-                  placeholder="เช่น 1"
+                  placeholder="e.g. 1"
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
 
               <div className="flex-1 space-y-1">
-                <label className="text-xs font-medium text-slate-700">ชื่อวิดีโอ</label>
+                <label className="text-xs font-medium text-slate-700">Subject name</label>
                 <input
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
-                  placeholder="เช่น Video Test"
+                  placeholder="e.g. Video Test"
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
@@ -224,10 +237,11 @@ function FormSubmit() {
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-slate-900 md:text-base">
-                คำชี้แจงการประเมิน
+                Evaluation rubric
               </h2>
               <p className="text-xs text-slate-600 md:text-sm">
-                โปรดพิจารณาแต่ละข้อคำถาม แล้วให้คะแนนตามความเหมาะสมโดยใช้ระดับคะแนน 1-5
+                Score each question on a 1-5 scale. The generated document will use these values
+                immediately after submission.
               </p>
             </div>
 
@@ -260,18 +274,16 @@ function FormSubmit() {
           </section>
 
           <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
-            <label className="text-sm font-semibold text-slate-800">
-              ข้อเสนอแนะโดยรวมต่อวิดีโอการสอน
-            </label>
+            <label className="text-sm font-semibold text-slate-800">Overall suggestion</label>
             <p className="text-xs text-slate-500">
-              ระบุความคิดเห็น ภาพรวม จุดเด่น จุดที่ควรปรับปรุง หรือข้อเสนอแนะอื่น ๆ
+              Provide summary notes, highlights, risks, and any recommended improvements.
             </p>
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              rows={3}
+              rows={4}
               className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
-              placeholder="ตัวอย่าง: เนื้อหาชัดเจนดี แต่ช่วงอธิบายตัวอย่างที่ 2 อาจเร็วไปเล็กน้อย..."
+              placeholder="Summarize the main findings for the generated document."
             />
           </section>
 
@@ -285,58 +297,14 @@ function FormSubmit() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-full bg-primary px-6 py-2 text-base font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.03] motion-safe:hover:bg-primary/90 motion-safe:active:scale-[0.97]"
+                className="rounded-full bg-primary px-6 py-2 text-base font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-60 hover:bg-primary/90"
               >
-                {isSaving ? "กำลังบันทึก..." : "ส่งแบบประเมิน"}
+                {isSaving ? "Generating document..." : "Submit Evaluation"}
               </button>
             </div>
           </div>
         </form>
       </main>
-
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-xl">
-            <div className="relative overflow-hidden bg-primary p-6 text-center">
-              <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-              <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-black/10 blur-2xl" />
-
-              <div className="relative z-10 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-md">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md">
-                  <svg
-                    className="h-6 w-6 text-primary"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-              </div>
-              <h3 className="relative z-10 mb-1 text-xl font-bold text-white">
-                บันทึกข้อมูลสำเร็จ
-              </h3>
-              <p className="relative z-10 text-sm font-medium text-white/90">
-                ส่งแบบประเมินเรียบร้อยแล้ว ขอบคุณครับ
-              </p>
-            </div>
-            <div className="bg-white p-5 text-center">
-              <button
-                type="button"
-                onClick={() => setShowSuccessModal(false)}
-                className="w-full rounded-xl bg-slate-100 px-4 py-3 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.01] motion-safe:hover:bg-slate-200 motion-safe:active:scale-[0.99]"
-              >
-                ตกลง
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { SECTIONS } from "../config/sections";
 import { accountingService } from "../services/accountingService";
 import MainNavbar from "../components/MainNavbar";
 import BackButton from "../components/BackButton";
+import { useAuthRole } from "../hooks/useAuthRole";
+import { roleAtLeast } from "../lib/roles";
 
 // Type definitions
 type RubricValue = number | null;
@@ -37,6 +39,7 @@ type SectionStats = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { role } = useAuthRole();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SectionStats[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
@@ -44,39 +47,58 @@ export default function Dashboard() {
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
 
   useEffect(() => {
-    checkAccessAndFetch();
-  }, []);
+    if (!role) {
+      return;
+    }
 
-  const checkAccessAndFetch = async () => {
+    const run = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+
+        if (!user) {
+          navigate("/", { replace: true });
+          return;
+        }
+
+        void accountingService.logActivity({
+          user_id: user.id,
+          action: "dashboard.viewed",
+          resource: "dashboard",
+        }).catch((logError) => {
+          console.error("Activity log failed:", logError);
+        });
+
+        await fetchEvaluations();
+      } catch (error) {
+        console.error("Access check failed", error);
+        navigate("/form-submit", { replace: true });
+      }
+    };
+
+    void run();
+  }, [fetchEvaluations, navigate, role]);
+
+  const fetchEvaluations = useCallback(async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         navigate("/", { replace: true });
         return;
       }
 
-      void accountingService.logActivity({
-        user_id: user.id,
-        action: "dashboard.viewed",
-        resource: "dashboard",
-      }).catch((logError) => {
-        console.error("Activity log failed:", logError);
-      });
-
-      await fetchEvaluations();
-    } catch (error) {
-      console.error("Access check failed", error);
-      navigate("/form-submit", { replace: true });
-    }
-  };
-
-  const fetchEvaluations = async () => {
-    try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("evaluations")
         .select("id, rubric, created_at");
+
+      if (!roleAtLeast(role ?? "user", "editor")) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -88,7 +110,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, role]);
 
   const processStats = (evaluations: EvaluationRow[]) => {
     setTotalResponses(evaluations.length);
