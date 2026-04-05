@@ -43,7 +43,7 @@ export default function ConfirmModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm dark:bg-slate-950/70"
           onClick={() => {
             if (!confirmDisabled) onCancel();
           }}
@@ -53,15 +53,15 @@ export default function ConfirmModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ duration: 0.22, ease: "easeInOut" }}
-            className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl"
+            className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-modal-title"
             aria-describedby="confirm-modal-message"
           >
-            <div className="bg-red-100 px-6 py-7">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-sm">
+            <div className="bg-red-100 px-6 py-7 dark:bg-red-950/40">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-sm dark:bg-red-500/90">
                 <svg
                   className="h-7 w-7"
                   viewBox="0 0 20 20"
@@ -80,13 +80,13 @@ export default function ConfirmModal({
             <div className="px-6 pb-6 pt-5">
               <h2
                 id="confirm-modal-title"
-                className="text-center text-xl font-bold text-slate-900"
+                className="text-center text-xl font-bold text-slate-900 dark:text-slate-100"
               >
                 {title}
               </h2>
               <p
                 id="confirm-modal-message"
-                className="mt-2 text-center text-sm leading-6 text-slate-500"
+                className="mt-2 text-center text-sm leading-6 text-slate-500 dark:text-slate-400"
               >
                 {message}
               </p>
@@ -96,7 +96,7 @@ export default function ConfirmModal({
                   type="button"
                   onClick={onCancel}
                   disabled={confirmDisabled}
-                  className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-105 motion-safe:hover:bg-slate-100 motion-safe:active:scale-95"
+                  className="btn-secondary rounded-full px-5 py-2.5 text-sm font-medium"
                 >
                   {cancelLabel}
                 </button>
@@ -104,7 +104,7 @@ export default function ConfirmModal({
                   type="button"
                   onClick={onConfirm}
                   disabled={confirmDisabled}
-                  className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-red-300 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-105 motion-safe:hover:bg-red-700 motion-safe:active:scale-95"
+                  className="btn-danger rounded-full px-5 py-2.5 text-sm font-semibold disabled:bg-red-300 dark:disabled:bg-red-900/40"
                 >
                   {confirmDisabled ? "Processing..." : confirmLabel}
                 </button>

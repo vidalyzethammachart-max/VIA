@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { SECTIONS } from "../config/sections";
 import { accountingService } from "../services/accountingService";
 import MainNavbar from "../components/MainNavbar";
-import BackButton from "../components/BackButton";
 import { useAuthRole } from "../hooks/useAuthRole";
 import { roleAtLeast } from "../lib/roles";
 
@@ -193,11 +192,10 @@ export default function Dashboard() {
   // Find active section data
   const activeSectionData = stats.find((s) => s.id === activeTab);
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <MainNavbar />
-      <BackButton onBack={() => navigate(-1)} />
-      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <MainNavbar />
+        <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
 
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">

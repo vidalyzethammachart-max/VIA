@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { normalizeRole, roleAtLeast, type AppRole } from "../lib/roles";
 import MainNavbar from "../components/MainNavbar";
+import { useTheme } from "../theme/ThemeProvider";
 
 type UserRow = {
   auth_user_id: string;
@@ -30,6 +31,8 @@ type DeleteTarget = {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
@@ -180,6 +183,9 @@ export default function AdminDashboard() {
     return matchesRole && haystack.includes(query);
   });
 
+  const hasPendingRoleChange = (row: UserRow) =>
+    (pendingRoleByUser[row.auth_user_id] ?? row.role) !== row.role;
+
   const updateUserRole = async (targetAuthUserId: string) => {
     const role = pendingRoleByUser[targetAuthUserId];
     if (!role) return;
@@ -255,13 +261,17 @@ export default function AdminDashboard() {
           <div className="flex gap-2">
             <Link
               to="/role-requests"
-              className="rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#03326a]"
+              className="btn-primary"
             >
               Manage Role Requests
             </Link>
             <button
               onClick={() => navigate(-1)}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className={`btn-base ${
+                isDark
+                  ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              }`}
             >
               Back
             </button>
@@ -334,9 +344,9 @@ export default function AdminDashboard() {
                     <tr key={row.auth_user_id} className="border-t border-slate-100">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                          <div className="h-10 w-10 aspect-square shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
                             {row.avatar_url ? (
-                              <img src={row.avatar_url} alt={row.full_name ?? row.email ?? "User"} className="h-full w-full object-cover" />
+                              <img src={row.avatar_url} alt={row.full_name ?? row.email ?? "User"} className="block h-full w-full rounded-full object-cover object-center" />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-500">
                                 {(row.full_name ?? row.email ?? "U").slice(0, 1).toUpperCase()}
@@ -376,9 +386,11 @@ export default function AdminDashboard() {
                             disabled={
                               row.auth_user_id === currentAdminId ||
                               busyUserId === row.auth_user_id ||
-                              (pendingRoleByUser[row.auth_user_id] ?? row.role) === row.role
+                              !hasPendingRoleChange(row)
                             }
-                            className="ui-hover-button rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100/60 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-transparent disabled:text-slate-400 dark:border-slate-700 dark:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800/60 dark:disabled:border-slate-700 dark:disabled:bg-transparent dark:disabled:text-slate-500"
+                            className={`px-3 py-2 text-xs font-medium ${
+                              hasPendingRoleChange(row) ? "btn-primary" : "btn-ghost-primary"
+                            }`}
                           >
                             Save Role
                           </button>
@@ -390,7 +402,7 @@ export default function AdminDashboard() {
                               })
                             }
                             disabled={row.auth_user_id === currentAdminId || busyUserId === row.auth_user_id}
-                            className="ui-hover-button rounded-lg border border-red-500 bg-red-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 dark:border-red-500 dark:bg-red-500 dark:text-white dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                            className="btn-danger rounded-xl px-3 py-2 text-xs"
                           >
                             Delete
                           </button>
@@ -413,9 +425,9 @@ export default function AdminDashboard() {
       </div>
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="relative w-full max-w-md rounded-[28px] border border-slate-200 bg-white px-8 pb-8 pt-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm dark:bg-slate-950/70">
+          <div className="relative w-full max-w-md rounded-[28px] border border-slate-200 bg-white px-8 pb-8 pt-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_24px_80px_rgba(2,6,23,0.55)]">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-8 w-8"
@@ -433,9 +445,9 @@ export default function AdminDashboard() {
             </div>
 
             <div className="mt-6 text-center">
-              <h2 className="text-[32px] font-semibold tracking-tight text-slate-900">Delete</h2>
-              <p className="mt-3 text-base leading-7 text-slate-500">
-                Are you sure you want to delete <span className="font-semibold text-slate-800">{deleteTarget.label}</span>?
+              <h2 className="text-[32px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">Delete</h2>
+              <p className="mt-3 text-base leading-7 text-slate-500 dark:text-slate-400">
+                Are you sure you want to delete <span className="font-semibold text-slate-800 dark:text-slate-200">{deleteTarget.label}</span>?
               </p>
             </div>
 
@@ -443,14 +455,14 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setDeleteTarget(null)}
                 disabled={busyUserId === deleteTarget.authUserId}
-                className="ui-hover-button rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-base font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-secondary rounded-2xl px-4 py-3.5 text-base font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={() => void deleteUserAccount(deleteTarget.authUserId)}
                 disabled={busyUserId === deleteTarget.authUserId}
-                className="ui-hover-button rounded-2xl border border-red-500 bg-red-500 px-4 py-3.5 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-danger rounded-2xl px-4 py-3.5 text-base"
               >
                 {busyUserId === deleteTarget.authUserId ? "Deleting..." : "Confirm"}
               </button>

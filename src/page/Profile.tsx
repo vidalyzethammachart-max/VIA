@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
-import BackButton from "../components/BackButton";
 import MainNavbar from "../components/MainNavbar";
 import profilePic from "../assets/profile.jpg";
 import { supabase } from "../lib/supabaseClient";
@@ -285,21 +284,20 @@ export default function ProfilePage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <MainNavbar />
-      <BackButton onBack={() => navigate(-1)} />
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <MainNavbar />
 
-      <div className="px-4 py-12 sm:px-6 lg:px-8">
+        <div className="px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
           <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm sm:p-12">
             <div className="flex flex-col items-center text-center">
               <div className="relative mb-6">
-                <div className="h-24 w-24 overflow-hidden rounded-full border-2 border-[#04418b]/10 bg-white shadow-sm ring-4 ring-[#04418b]/5">
+                <div className="h-24 w-24 aspect-square overflow-hidden rounded-full border-2 border-[#04418b]/10 bg-white shadow-sm ring-4 ring-[#04418b]/5">
                   <img
                     src={localAvatarPreview || (isEditing ? editAvatarUrl : userInfo?.avatar_url) || profilePic}
                     alt="Profile"
-                    className="h-full w-full object-cover"
+                    className="block h-full w-full rounded-full object-cover object-center"
                   />
                 </div>
                 {isEditing && (
@@ -313,7 +311,7 @@ export default function ProfilePage() {
                       setShowAvatarEditor((current) => !current);
                     }}
                     disabled={saving}
-                    className="ui-hover-button absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#04418b]/15 bg-white px-3 py-1.5 text-[11px] font-bold text-[#04418b]"
+                    className="btn-ghost-primary absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold"
                   >
                     {saving
                       ? "กำลังบันทึก..."
@@ -344,7 +342,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => avatarInputRef.current?.click()}
-                      className="ui-hover-button rounded-xl border border-[#04418b]/15 bg-white px-4 py-3 text-sm font-bold text-[#04418b]"
+                      className="btn-ghost-primary px-4 py-3 text-sm font-bold"
                     >
                       เลือกไฟล์รูป
                     </button>
@@ -357,7 +355,7 @@ export default function ProfilePage() {
                           avatarInputRef.current.value = "";
                         }
                       }}
-                      className="ui-hover-button rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600"
+                      className="btn-secondary px-4 py-3 text-sm font-medium"
                     >
                       ลบรูป
                     </button>
@@ -436,14 +434,14 @@ export default function ProfilePage() {
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="ui-hover-button w-full rounded-xl bg-[#04418b] py-3.5 text-sm font-bold text-white shadow-lg shadow-[#04418b]/20 disabled:opacity-50"
+                      className="btn-primary w-full py-3.5 text-sm font-bold"
                     >
                       {saving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
                     </button>
                     <button
                       onClick={resetEditState}
                       disabled={saving}
-                      className="ui-hover-button w-full rounded-full border border-slate-200 bg-slate-50 px-6 py-3 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="btn-secondary w-full rounded-full px-6 py-3 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -470,7 +468,7 @@ export default function ProfilePage() {
                         setSelectedAvatarFile(null);
                         setLocalAvatarPreview(null);
                       }}
-                      className="ui-hover-button flex items-center gap-2 rounded-full border border-[#04418b]/15 bg-[#04418b]/5 px-5 py-3 text-sm font-bold text-[#04418b]"
+                      className="btn-ghost-primary flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -495,7 +493,7 @@ export default function ProfilePage() {
                         navigate("/", { replace: true });
                       }}
                       disabled={saving}
-                      className="ui-hover-button min-w-32 rounded-full border border-slate-200 bg-slate-50 px-6 py-3 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="btn-danger min-w-32 rounded-full px-6 py-3 text-sm font-medium"
                     >
                       ออกจากระบบ
                     </button>

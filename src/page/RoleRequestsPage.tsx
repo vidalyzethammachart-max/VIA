@@ -8,7 +8,6 @@ import {
   type RoleRequestStatus,
 } from "../services/roleRequestService";
 import MainNavbar from "../components/MainNavbar";
-import BackButton from "../components/BackButton";
 import ConfirmModal from "../components/ConfirmModal";
 
 type UserInfoMap = Record<string, { email: string | null; role: AppRole }>;
@@ -149,7 +148,6 @@ export default function RoleRequestsPage() {
       />
 
       <MainNavbar />
-      <BackButton onBack={() => navigate(-1)} />
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold text-slate-900">Role Requests</h1>
@@ -157,7 +155,7 @@ export default function RoleRequestsPage() {
             {isAdmin && (
               <Link
                 to="/admin-dashboard"
-                className="rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#03326a]"
+                className="btn-primary"
               >
                 Admin Dashboard
               </Link>
@@ -174,7 +172,7 @@ export default function RoleRequestsPage() {
             <button
               onClick={handleRequestEditorRole}
               disabled={submitting || roleAtLeast(currentRole, "editor") || Boolean(pendingRequest)}
-              className="mt-4 rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#03326a] disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="btn-primary mt-4 disabled:bg-slate-400 dark:disabled:bg-slate-700"
             >
               {pendingRequest
                 ? "Request Pending"
@@ -233,14 +231,14 @@ export default function RoleRequestsPage() {
                               <button
                                 onClick={() => void handleReview(request.id, "approved")}
                                 disabled={submitting}
-                                className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                                className="btn-primary rounded-lg px-3 py-1 text-xs"
                               >
                                 Approve
                               </button>
                               <button
                                 onClick={() => void handleReview(request.id, "rejected")}
                                 disabled={submitting}
-                                className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                                className="btn-danger rounded-lg px-3 py-1 text-xs"
                               >
                                 Reject
                               </button>
@@ -252,7 +250,7 @@ export default function RoleRequestsPage() {
                           <button
                             onClick={() => setCancelRequestId(request.id)}
                             disabled={submitting}
-                            className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-60"
+                            className="btn-danger rounded-lg px-3 py-1 text-xs"
                           >
                             Cancel
                           </button>

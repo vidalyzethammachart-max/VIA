@@ -182,7 +182,7 @@ export default function PreviewPage() {
                       href={artifactUrls.docxUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="ui-hover-button rounded-xl bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#03326a]"
+                      className="btn-primary text-center"
                     >
                       Download DOCX
                     </a>
@@ -192,7 +192,7 @@ export default function PreviewPage() {
                       href={artifactUrls.pdfUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="ui-hover-button rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      className="btn-secondary text-center"
                     >
                       Download PDF
                     </a>
@@ -201,7 +201,7 @@ export default function PreviewPage() {
               )}
               <Link
                 to="/my-forms"
-                className="ui-hover-button rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="btn-secondary text-center"
               >
                 Back to My Forms
               </Link>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import BackButton from "../components/BackButton";
 import MainNavbar from "../components/MainNavbar";
 import { supabase } from "../lib/supabaseClient";
 
@@ -110,7 +109,6 @@ export default function MyFormsDashboard() {
         title="My Forms Dashboard"
         subtitle="Track how many evaluation forms you have submitted and preview linked documents."
       />
-      <BackButton onBack={() => navigate(-1)} />
 
       <main className="mx-auto max-w-6xl px-4 py-6 md:py-8">
         <section className="grid gap-4 md:grid-cols-3">
@@ -136,7 +134,7 @@ export default function MyFormsDashboard() {
             </p>
             <Link
               to="/form-submit"
-              className="ui-hover-button mt-3 inline-flex rounded-xl bg-[#04418b] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#03326a]"
+              className="btn-primary mt-3 inline-flex"
             >
               Submit new form
             </Link>
@@ -204,7 +202,7 @@ export default function MyFormsDashboard() {
                       <>
                         <Link
                           to={`/preview/${item.id}`}
-                          className="ui-hover-button rounded-xl bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#03326a]"
+                          className="btn-primary text-center"
                         >
                           Preview
                         </Link>
@@ -213,7 +211,7 @@ export default function MyFormsDashboard() {
                             type="button"
                             onClick={() => void handleDownload(item.id, "pdf")}
                             disabled={activeDownloadKey === `${item.id}:pdf`}
-                            className="ui-hover-button rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-secondary text-center"
                           >
                             {activeDownloadKey === `${item.id}:pdf` ? "Preparing PDF..." : "Download PDF"}
                           </button>
@@ -223,7 +221,7 @@ export default function MyFormsDashboard() {
                             type="button"
                             onClick={() => void handleDownload(item.id, "docx")}
                             disabled={activeDownloadKey === `${item.id}:docx`}
-                            className="ui-hover-button rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-secondary text-center"
                           >
                             {activeDownloadKey === `${item.id}:docx` ? "Preparing DOCX..." : "Download DOCX"}
                           </button>
@@ -233,7 +231,7 @@ export default function MyFormsDashboard() {
                             href={`https://docs.google.com/document/d/${item.source_doc_id}/edit`}
                             target="_blank"
                             rel="noreferrer"
-                            className="ui-hover-button rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                            className="btn-secondary text-center"
                           >
                             Open Source Doc
                           </a>
@@ -242,14 +240,14 @@ export default function MyFormsDashboard() {
                     ) : item.document_status === "failed" ? (
                       <Link
                         to={`/preview/${item.id}`}
-                        className="ui-hover-button rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-center text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                        className="btn-danger text-center"
                       >
                         View Error
                       </Link>
                     ) : (
                       <Link
                         to={`/preview/${item.id}`}
-                        className="ui-hover-button rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                        className="btn-secondary text-center"
                       >
                         Track Status
                       </Link>

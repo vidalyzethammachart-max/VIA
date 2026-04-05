@@ -23,9 +23,9 @@ const POSITION_CLASS: Record<BackButtonPosition, string> = {
 
 const VARIANT_CLASS: Record<BackButtonVariant, string> = {
   light:
-    "bg-white text-slate-700 border border-slate-200 shadow-lg motion-safe:hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:border-slate-700 dark:motion-safe:hover:bg-slate-800",
+    "bg-red-500 text-white border border-red-500 shadow-lg motion-safe:hover:bg-red-600 dark:bg-red-500 dark:text-white dark:border-red-500 dark:motion-safe:hover:bg-red-600",
   dark:
-    "bg-slate-800 text-white border border-slate-700 shadow-xl motion-safe:hover:bg-slate-700",
+    "bg-red-500 text-white border border-red-500 shadow-xl motion-safe:hover:bg-red-600",
 };
 
 export default function BackButton({

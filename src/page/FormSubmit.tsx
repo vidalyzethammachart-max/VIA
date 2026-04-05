@@ -172,13 +172,13 @@ function FormSubmit() {
                 type="button"
                 onClick={handleRequestEditorRole}
                 disabled={isRequestingRole}
-                className="ui-hover-button rounded-lg bg-[#04418b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="btn-primary disabled:bg-slate-400"
               >
                 {isRequestingRole ? "Submitting..." : "Request Editor Role"}
               </button>
               <Link
                 to="/role-requests"
-                className="ui-hover-button rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+                className="btn-secondary text-center font-medium"
               >
                 View Requests
               </Link>
@@ -201,7 +201,7 @@ function FormSubmit() {
               </div>
               <Link
                 to="/my-forms"
-                className="ui-hover-button rounded-lg bg-[#04418b] px-4 py-2 text-center text-sm font-semibold text-white hover:bg-[#03326a]"
+                className="btn-primary text-center"
               >
                 Go to My Forms
               </Link>
@@ -297,7 +297,7 @@ function FormSubmit() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="ui-hover-button rounded-full bg-primary px-6 py-2 text-base font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-60 hover:bg-primary/90"
+                className="btn-primary rounded-full px-6 py-2 text-base shadow-md"
               >
                 {isSaving ? "Generating document..." : "Submit Evaluation"}
               </button>

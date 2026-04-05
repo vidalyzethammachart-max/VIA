@@ -80,6 +80,35 @@ html.dark .shadow-lg {
     @apply motion-safe:transition motion-safe:duration-200 motion-safe:ease-out motion-safe:hover:border-[#04418b]/60 motion-safe:hover:ring-2 motion-safe:hover:ring-[#04418b]/15 motion-safe:active:translate-y-0;
   }
 
+  .btn-base {
+    @apply inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply btn-base ui-hover-button border-[#04418b] bg-[#04418b] text-white;
+    @apply hover:bg-[#03326a];
+    @apply dark:border-[#04418b] dark:bg-[#04418b] dark:text-white dark:hover:bg-[#03326a];
+  }
+
+  .btn-secondary {
+    @apply btn-base ui-hover-button border-slate-300 bg-white text-slate-700;
+    @apply hover:bg-slate-100;
+    @apply dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+  }
+
+  .btn-danger {
+    @apply btn-base ui-hover-button border-red-500 bg-red-500 text-white;
+    @apply hover:bg-red-600;
+    @apply dark:border-red-500 dark:bg-red-500 dark:text-white dark:hover:bg-red-600;
+  }
+
+  .btn-ghost-primary {
+    @apply btn-base ui-hover-button border-[#04418b]/15 bg-[#04418b]/5 text-[#04418b];
+    @apply hover:bg-[#04418b]/10;
+    @apply dark:border-[#04418b]/30 dark:bg-[#04418b]/10 dark:text-[#8fc0ff] dark:hover:bg-[#04418b]/20;
+  }
+
   html.dark .ui-hover-button {
     @apply motion-safe:hover:border-[#7db2ff]/60 motion-safe:hover:ring-[#7db2ff]/15;
   }
