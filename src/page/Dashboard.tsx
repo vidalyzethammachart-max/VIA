@@ -371,24 +371,28 @@ export default function Dashboard() {
                               className="w-full h-full transform -rotate-90"
                             >
                               {(() => {
-                                let cumulativePercentage = 0;
+                                const radius = 40;
+                                const circumference = 2 * Math.PI * radius;
+                                let cumulativeLength = 0;
+
                                 return [5, 4, 3, 2, 1].map((score) => {
                                   const count = q.scores[score] || 0;
                                   const percentage =
                                     q.count > 0 ? (count / q.count) * 100 : 0;
                                   if (percentage === 0) return null;
 
-                                  const strokeDasharray = `${percentage} ${100 - percentage}`;
-                                  const strokeDashoffset =
-                                    -cumulativePercentage;
-                                  cumulativePercentage += percentage;
+                                  const segmentLength =
+                                    (count / q.count) * circumference;
+                                  const strokeDasharray = `${segmentLength} ${circumference - segmentLength}`;
+                                  const strokeDashoffset = -cumulativeLength;
+                                  cumulativeLength += segmentLength;
 
                                   return (
                                     <circle
                                       key={score}
                                       cx="50"
                                       cy="50"
-                                      r="40"
+                                      r={radius}
                                       fill="transparent"
                                       stroke={getScoreColor(score)}
                                       strokeWidth="20"
