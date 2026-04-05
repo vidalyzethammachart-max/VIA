@@ -28,6 +28,7 @@ function FormSubmit() {
   const [userRole, setUserRole] = useState<AppRole>("user");
   const [isRequestingRole, setIsRequestingRole] = useState(false);
   const [roleRequestMessage, setRoleRequestMessage] = useState<string | null>(null);
+  const [showValidation, setShowValidation] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data: { user } }) => {
@@ -85,6 +86,37 @@ function FormSubmit() {
     return rubric;
   };
 
+  const validateForm = (): string | null => {
+    if (!authUserId) {
+      return "Your session is not ready. Please sign in again and retry.";
+    }
+
+    if (!orderNumber.trim()) {
+      return "Please fill in the order number.";
+    }
+
+    if (!subjectName.trim()) {
+      return "Please fill in the subject name.";
+    }
+
+    for (const section of SECTIONS) {
+      const sectionAnswers = answers[section.id] ?? {};
+
+      for (const question of section.questions) {
+        const value = sectionAnswers[question.label];
+        if (typeof value !== "number") {
+          return `Please answer every rubric question before submitting. Missing item: ${section.title}`;
+        }
+      }
+    }
+
+    if (!comment.trim()) {
+      return "Please fill in the overall suggestion.";
+    }
+
+    return null;
+  };
+
   const buildPayload = (): EvaluationPayload | null => {
     if (!authUserId) {
       return null;
@@ -92,8 +124,8 @@ function FormSubmit() {
 
     return {
       user_id: authUserId,
-      order_number: orderNumber.trim() || "Unspecified",
-      subject_name: subjectName.trim() || "Untitled subject",
+      order_number: orderNumber.trim(),
+      subject_name: subjectName.trim(),
       overall_suggestion: comment.trim(),
       rubric: buildRubric(),
       Email: userEmail || undefined,
@@ -105,12 +137,33 @@ function FormSubmit() {
     setSubjectName("");
     setAnswers({});
     setComment("");
+    setShowValidation(false);
   };
+
+  const isOrderNumberInvalid = showValidation && !orderNumber.trim();
+  const isSubjectNameInvalid = showValidation && !subjectName.trim();
+  const isCommentInvalid = showValidation && !comment.trim();
+
+  useEffect(() => {
+    if (!showValidation) {
+      return;
+    }
+
+    setSubmitErrorMessage(validateForm());
+  }, [authUserId, orderNumber, subjectName, answers, comment, showValidation]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSaving(true);
     setSubmitErrorMessage(null);
+
+    const validationError = validateForm();
+    if (validationError) {
+      setShowValidation(true);
+      setSubmitErrorMessage(validationError);
+      return;
+    }
+
+    setIsSaving(true);
 
     const payload = buildPayload();
     if (!payload) {
@@ -122,9 +175,9 @@ function FormSubmit() {
     try {
       const result = await submitEvaluation(payload);
       resetForm();
-      navigate(`/preview/${result.id}`, {
+      navigate("/my-forms", {
         replace: true,
-        state: { generated: true },
+        state: { generated: true, evaluationId: result.id },
       });
     } catch (error) {
       console.error("Error while saving:", error);
@@ -209,7 +262,7 @@ function FormSubmit() {
           </section>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form noValidate onSubmit={handleSubmit} className="space-y-6">
           <section className="ui-hover-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end">
               <div className="space-y-1 md:w-40">
@@ -218,8 +271,17 @@ function FormSubmit() {
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
                   placeholder="e.g. 1"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
+                  required
+                  aria-invalid={isOrderNumberInvalid}
+                  className={`w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+                    isOrderNumberInvalid
+                      ? "border border-red-400 focus:border-red-400 focus:ring-red-200 dark:border-red-500 dark:focus:border-red-500 dark:focus:ring-red-950/40"
+                      : "border border-slate-200 focus:border-primary focus:ring-primary/60 dark:border-slate-700"
+                  }`}
                 />
+                {isOrderNumberInvalid && (
+                  <p className="text-xs font-medium text-red-600">Please fill out this field.</p>
+                )}
               </div>
 
               <div className="flex-1 space-y-1">
@@ -228,8 +290,17 @@ function FormSubmit() {
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
                   placeholder="e.g. Video Test"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
+                  required
+                  aria-invalid={isSubjectNameInvalid}
+                  className={`w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+                    isSubjectNameInvalid
+                      ? "border border-red-400 focus:border-red-400 focus:ring-red-200 dark:border-red-500 dark:focus:border-red-500 dark:focus:ring-red-950/40"
+                      : "border border-slate-200 focus:border-primary focus:ring-primary/60 dark:border-slate-700"
+                  }`}
                 />
+                {isSubjectNameInvalid && (
+                  <p className="text-xs font-medium text-red-600">Please fill out this field.</p>
+                )}
               </div>
             </div>
           </section>
@@ -266,6 +337,7 @@ function FormSubmit() {
                 key={section.id}
                 section={section}
                 answers={answers[section.id] || {}}
+                showValidation={showValidation}
                 onToggle={(questionLabel, value) =>
                   handleToggleAnswer(section.id, questionLabel, value)
                 }
@@ -282,13 +354,25 @@ function FormSubmit() {
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={4}
-              className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
+              required
+              aria-invalid={isCommentInvalid}
+              className={`mt-1 w-full resize-none rounded-xl bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+                isCommentInvalid
+                  ? "border border-red-400 focus:border-red-400 focus:ring-red-200 dark:border-red-500 dark:focus:border-red-500 dark:focus:ring-red-950/40"
+                  : "border border-slate-200 focus:border-primary focus:ring-primary/60 dark:border-slate-700"
+              }`}
               placeholder="Summarize the main findings for the generated document."
             />
+            {isCommentInvalid && (
+              <p className="text-xs font-medium text-red-600">Please fill out this field.</p>
+            )}
           </section>
 
           <div className="pb-10">
-            {submitErrorMessage && (
+            {submitErrorMessage &&
+              !isOrderNumberInvalid &&
+              !isSubjectNameInvalid &&
+              !isCommentInvalid && (
               <div className="mb-4 w-full rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
                 {submitErrorMessage}
               </div>

@@ -32,6 +32,12 @@ export default function MyFormsDashboard() {
   const [items, setItems] = useState<EvaluationItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeDownloadKey, setActiveDownloadKey] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | EvaluationItem["document_status"]>("all");
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   useEffect(() => {
     void loadMyForms();
@@ -102,6 +108,27 @@ export default function MyFormsDashboard() {
   };
 
   const completedPreviewCount = items.filter((item) => item.document_status === "ready").length;
+  const filteredItems = items.filter((item) => {
+    const matchesStatus =
+      statusFilter === "all" || item.document_status === statusFilter;
+
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return matchesStatus;
+    }
+
+    const haystack = [
+      item.subject_name,
+      item.order_number,
+      item.overall_suggestion,
+      item.document_status,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return matchesStatus && haystack.includes(query);
+  });
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -124,7 +151,9 @@ export default function MyFormsDashboard() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               Ready to preview
             </p>
-            <p className="mt-3 text-4xl font-bold text-[#04418b]">{completedPreviewCount}</p>
+            <p className="mt-3 text-4xl font-bold text-sky-600 dark:text-sky-400">
+              {completedPreviewCount}
+            </p>
             <p className="mt-2 text-sm text-slate-500">Entries that already have generated preview files.</p>
           </div>
 
@@ -148,6 +177,29 @@ export default function MyFormsDashboard() {
             <p className="mt-1 text-sm text-slate-500">
               Each row is one evaluation form submitted by your account.
             </p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search subject, order no., note..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#04418b]/30 focus:ring-4 focus:ring-[#04418b]/5 sm:w-72"
+              />
+              <select
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(
+                    e.target.value as "all" | EvaluationItem["document_status"],
+                  )
+                }
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#04418b]/30 focus:ring-4 focus:ring-[#04418b]/5"
+              >
+                <option value="all">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="ready">Ready</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
           </div>
 
           {loading ? (
@@ -160,9 +212,13 @@ export default function MyFormsDashboard() {
             <div className="px-5 py-12 text-center text-sm text-slate-500">
               You have not submitted any forms yet.
             </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="px-5 py-12 text-center text-sm text-slate-500">
+              No submissions match the current search or filter.
+            </div>
           ) : (
             <div className="divide-y divide-slate-200">
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <article
                   key={item.id}
                   className="ui-hover-card flex flex-col gap-4 px-5 py-5 md:flex-row md:items-start md:justify-between"

@@ -1,73 +1,178 @@
-# React + TypeScript + Vite
+# VIA
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Video Intelligence & Analytics web application for evaluation form submission, role-based access, document generation, and admin user management.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React 18
+- TypeScript
+- Vite
+- Tailwind CSS
+- Supabase
+  - Auth
+  - Postgres
+  - Storage
+  - Edge Functions
+- n8n
+- Google Apps Script
 
-## React Compiler
+## Main Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Authentication with login, register, forgot password, and reset password
+- Role-based routing for `user`, `editor`, and `admin`
+- Evaluation form submission flow
+- Dashboard with bar chart and donut chart summaries
+- My Forms page with generated document tracking
+- Document preview with PDF/DOCX download
+- Profile management
+  - full name
+  - employee number
+  - gender
+  - avatar upload
+- Admin dashboard
+  - user search/filter
+  - role update
+  - account deletion
+- Light mode / dark mode
 
-## Expanding the ESLint configuration
+## App Routes
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- `/` login
+- `/register`
+- `/forgot-password`
+- `/reset-password`
+- `/dashboard`
+- `/form-submit`
+- `/my-forms`
+- `/preview/:docId`
+- `/profile`
+- `/role-requests`
+- `/admin`
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Environment Variables
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Create a `.env` file:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_N8N_WEBHOOK_URL=YOUR_N8N_WEBHOOK_URL
+VITE_SUPABASE_URL=YOUR_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Local Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Install dependencies:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
+
+Run development server:
+
+```bash
+npm run dev
+```
+
+Build production bundle:
+
+```bash
+npm run build
+```
+
+Preview production build:
+
+```bash
+npm run preview
+```
+
+Lint:
+
+```bash
+npm run lint
+```
+
+## Supabase
+
+Supabase logic in this project includes:
+
+- database migrations in [`supabase/migrations`](./supabase/migrations)
+- edge functions in [`supabase/functions`](./supabase/functions)
+
+Current edge functions:
+
+- `forward-to-n8n`
+- `document-generation-callback`
+- `document-artifact-url`
+- `admin-user-management`
+- `generate-doc`
+
+## Database Migrations
+
+Important migrations already included:
+
+- `20260403195000_accounting_layer.sql`
+- `20260403223000_role_requests.sql`
+- `20260404001000_cancel_role_requests.sql`
+- `20260404013000_evaluations_user_doc_columns.sql`
+- `20260404030000_secure_evaluations_document_flow.sql`
+- `20260404110000_document_artifacts_storage.sql`
+- `20260404123000_expand_user_profile_fields.sql`
+- `20260405110000_profile_avatar_storage.sql`
+
+## Document Generation Flow
+
+The document pipeline is split across the app, Supabase, n8n, and Google Apps Script.
+
+High-level flow:
+
+1. User submits an evaluation.
+2. Supabase forwards the request to n8n.
+3. n8n prepares payload data for Google Apps Script.
+4. Apps Script creates a Google Doc from a template.
+5. Apps Script exports PDF and DOCX.
+6. Apps Script uploads files to Supabase Storage.
+7. Apps Script calls `document-generation-callback`.
+8. The app reads generated artifacts from Supabase Storage for preview/download.
+
+Generated document artifacts are stored in:
+
+- bucket: `evaluation-documents`
+- path pattern:
+  - `evaluations/<evaluation_id>/result.pdf`
+  - `evaluations/<evaluation_id>/result.docx`
+
+Profile avatars are stored in:
+
+- bucket: `profile-avatars`
+
+## Project Structure
+
+```text
+src/
+  assets/
+  components/
+  config/
+  hooks/
+  lib/
+  page/
+  services/
+  theme/
+supabase/
+  functions/
+  migrations/
+```
+
+## Notable Pages
+
+- [`src/page/Dashboard.tsx`](./src/page/Dashboard.tsx)
+- [`src/page/FormSubmit.tsx`](./src/page/FormSubmit.tsx)
+- [`src/page/MyFormsDashboard.tsx`](./src/page/MyFormsDashboard.tsx)
+- [`src/page/PreviewPage.tsx`](./src/page/PreviewPage.tsx)
+- [`src/page/Profile.tsx`](./src/page/Profile.tsx)
+- [`src/page/AdminDashboard.tsx`](./src/page/AdminDashboard.tsx)
+
+## Notes
+
+- This project expects Supabase policies, buckets, and edge functions to be deployed before all features work correctly.
+- Google Apps Script is part of the production document pipeline and is managed outside this repository.
+- n8n is also external to this repository and must be configured separately.
