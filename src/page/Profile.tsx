@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
-import MainNavbar from "../components/MainNavbar";
 import profilePic from "../assets/profile.jpg";
+import MainNavbar from "../components/MainNavbar";
+import { useLanguage } from "../i18n/LanguageProvider";
 import { supabase } from "../lib/supabaseClient";
 import { accountingService } from "../services/accountingService";
 
@@ -16,23 +17,16 @@ type UserInfoRow = {
   avatar_url: string | null;
 };
 
-const GENDER_OPTIONS = [
-  { value: "male", label: "ชาย" },
-  { value: "female", label: "หญิง" },
-  { value: "other", label: "อื่น ๆ" },
-  { value: "prefer_not_to_say", label: "ไม่ระบุ" },
-];
-
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 
-async function resizeAvatarImage(file: File) {
+async function resizeAvatarImage(file: File, readFailed: string, prepareFailed: string, resizeFailed: string) {
   const imageUrl = URL.createObjectURL(file);
 
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const nextImage = new Image();
       nextImage.onload = () => resolve(nextImage);
-      nextImage.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์รูปได้"));
+      nextImage.onerror = () => reject(new Error(readFailed));
       nextImage.src = imageUrl;
     });
 
@@ -47,7 +41,7 @@ async function resizeAvatarImage(file: File) {
 
     const context = canvas.getContext("2d");
     if (!context) {
-      throw new Error("ไม่สามารถเตรียมรูปสำหรับอัปโหลดได้");
+      throw new Error(prepareFailed);
     }
 
     context.drawImage(img, 0, 0, width, height);
@@ -55,7 +49,7 @@ async function resizeAvatarImage(file: File) {
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => {
         if (!result) {
-          reject(new Error("ไม่สามารถย่อรูปโปรไฟล์ได้"));
+          reject(new Error(resizeFailed));
           return;
         }
         resolve(result);
@@ -68,27 +62,15 @@ async function resizeAvatarImage(file: File) {
   }
 }
 
-async function uploadAvatarFile(authUserId: string, file: File) {
-  const resizedBlob = await resizeAvatarImage(file);
-  const path = `${authUserId}/avatar.jpg`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(PROFILE_AVATAR_BUCKET)
-    .upload(path, resizedBlob, {
-      upsert: true,
-      contentType: "image/jpeg",
-    });
-
-  if (uploadError) {
-    throw uploadError;
-  }
-
-  const { data } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
-}
-
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const genderOptions = [
+    { value: "male", label: t("profile.male") },
+    { value: "female", label: t("profile.female") },
+    { value: "other", label: t("profile.other") },
+    { value: "prefer_not_to_say", label: t("profile.preferNotToSay") },
+  ];
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,7 +79,6 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
-
   const [editUserId, setEditUserId] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editFullName, setEditFullName] = useState("");
@@ -173,7 +154,6 @@ export default function ProfilePage() {
 
     const previewUrl = URL.createObjectURL(selectedAvatarFile);
     setLocalAvatarPreview(previewUrl);
-
     return () => URL.revokeObjectURL(previewUrl);
   }, [selectedAvatarFile]);
 
@@ -204,12 +184,36 @@ export default function ProfilePage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setError("โปรดเลือกไฟล์รูปภาพเท่านั้น");
+      setError(t("profile.invalidImage"));
       return;
     }
 
     setError(null);
     setSelectedAvatarFile(file);
+  };
+
+  const uploadAvatarFile = async (authUserId: string, file: File) => {
+    const resizedBlob = await resizeAvatarImage(
+      file,
+      t("profile.imageReadFailed"),
+      t("profile.imagePrepareFailed"),
+      t("profile.imageResizeFailed"),
+    );
+    const path = `${authUserId}/avatar.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .upload(path, resizedBlob, {
+        upsert: true,
+        contentType: "image/jpeg",
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(path);
+    return data.publicUrl;
   };
 
   const handleSave = async () => {
@@ -268,7 +272,7 @@ export default function ProfilePage() {
           console.error("Activity log failed:", logError);
         });
 
-      setSuccess("บันทึกข้อมูลสำเร็จ");
+      setSuccess(t("profile.saveSuccess"));
       setSelectedAvatarFile(null);
       setLocalAvatarPreview(null);
       setShowAvatarEditor(false);
@@ -278,17 +282,17 @@ export default function ProfilePage() {
       }
       await loadProfile();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      setError(err instanceof Error ? err.message : t("profile.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <MainNavbar />
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <MainNavbar />
 
-        <div className="px-4 py-12 sm:px-6 lg:px-8">
+      <div className="px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
           <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm sm:p-12">
             <div className="flex flex-col items-center text-center">
@@ -314,12 +318,12 @@ export default function ProfilePage() {
                     className="btn-ghost-primary absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold"
                   >
                     {saving
-                      ? "กำลังบันทึก..."
+                      ? t("profile.saving")
                       : selectedAvatarFile
-                        ? "ยืนยัน"
+                        ? t("profile.confirmPhoto")
                         : showAvatarEditor
-                          ? "ปิดการแก้รูป"
-                          : "เปลี่ยนรูป"}
+                          ? t("profile.closePhotoEdit")
+                          : t("profile.changePhoto")}
                   </button>
                 )}
               </div>
@@ -335,7 +339,7 @@ export default function ProfilePage() {
                   />
 
                   <label className="mb-2 block text-xs font-bold uppercase tracking-tight text-slate-400">
-                    รูปโปรไฟล์
+                    {t("profile.avatar")}
                   </label>
 
                   <div className="flex flex-wrap gap-3">
@@ -344,7 +348,7 @@ export default function ProfilePage() {
                       onClick={() => avatarInputRef.current?.click()}
                       className="btn-ghost-primary px-4 py-3 text-sm font-bold"
                     >
-                      เลือกไฟล์รูป
+                      {t("profile.chooseImage")}
                     </button>
                     <button
                       type="button"
@@ -357,7 +361,7 @@ export default function ProfilePage() {
                       }}
                       className="btn-secondary px-4 py-3 text-sm font-medium"
                     >
-                      ลบรูป
+                      {t("profile.removeImage")}
                     </button>
                   </div>
 
@@ -365,16 +369,14 @@ export default function ProfilePage() {
                     <p className="mt-3 text-sm font-medium text-slate-600">{selectedAvatarFile.name}</p>
                   )}
 
-                  <p className="mt-2 text-xs text-slate-400">
-                    ระบบจะย่อรูปให้ก่อนอัปโหลดและใช้รูปนี้แทนรูปเดิมทันทีหลังบันทึก
-                  </p>
+                  <p className="mt-2 text-xs text-slate-400">{t("profile.avatarHint")}</p>
                 </div>
               )}
 
               <h1 className="text-xl font-bold text-slate-800">
-                {loading ? "กำลังโหลด..." : userInfo?.full_name || userInfo?.user_id || "โปรไฟล์ของคุณ"}
+                {loading ? t("profile.loadingProfile") : userInfo?.full_name || userInfo?.user_id || t("profile.defaultName")}
               </h1>
-              <p className="mt-1 text-sm text-slate-400">ตั้งค่าและจัดการข้อมูลส่วนตัว</p>
+              <p className="mt-1 text-sm text-slate-400">{t("profile.subtitle")}</p>
             </div>
 
             <div className="mx-auto mt-12 w-full max-w-md">
@@ -392,72 +394,35 @@ export default function ProfilePage() {
 
               {loading ? (
                 <div className="flex justify-center py-12">
-                  <div className="text-sm text-slate-500">Loading profile...</div>
+                  <div className="text-sm text-slate-500">{t("profile.loadingProfile")}</div>
                 </div>
               ) : isEditing ? (
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <InputGroup
-                      label="User ID"
-                      value={editUserId}
-                      onChange={setEditUserId}
-                      placeholder="ระบุ User ID"
-                    />
-                    <InputGroup
-                      label="หมายเลขพนักงาน"
-                      value={editEmployeeNumber}
-                      onChange={setEditEmployeeNumber}
-                      placeholder="ระบุหมายเลขพนักงาน"
-                    />
-                    <InputGroup
-                      label="ชื่อ - นามสกุล"
-                      value={editFullName}
-                      onChange={setEditFullName}
-                      placeholder="ระบุชื่อและนามสกุล"
-                    />
-                    <SelectGroup
-                      label="เพศ"
-                      value={editGender}
-                      onChange={setEditGender}
-                      options={GENDER_OPTIONS}
-                    />
-                    <InputGroup
-                      label="อีเมล"
-                      value={editEmail}
-                      onChange={setEditEmail}
-                      type="email"
-                      placeholder="example@email.com"
-                    />
+                    <InputGroup label={t("profile.userId")} value={editUserId} onChange={setEditUserId} placeholder={t("profile.enterUserId")} />
+                    <InputGroup label={t("profile.employeeNumber")} value={editEmployeeNumber} onChange={setEditEmployeeNumber} placeholder={t("profile.enterEmployeeNumber")} />
+                    <InputGroup label={t("profile.fullName")} value={editFullName} onChange={setEditFullName} placeholder={t("profile.enterFullName")} />
+                    <SelectGroup label={t("profile.gender")} value={editGender} onChange={setEditGender} options={genderOptions} />
+                    <InputGroup label={t("profile.email")} value={editEmail} onChange={setEditEmail} type="email" placeholder={t("profile.enterEmail")} />
                   </div>
 
                   <div className="flex flex-col gap-3 pt-4">
-                    <button
-                      onClick={handleSave}
-                      disabled={saving}
-                      className="btn-primary w-full py-3.5 text-sm font-bold"
-                    >
-                      {saving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
+                    <button onClick={handleSave} disabled={saving} className="btn-primary w-full py-3.5 text-sm font-bold">
+                      {saving ? t("profile.saving") : t("profile.saveChanges")}
                     </button>
-                    <button
-                      onClick={resetEditState}
-                      disabled={saving}
-                      className="btn-secondary w-full rounded-full px-6 py-3 text-sm font-medium"
-                    >
-                      Cancel
+                    <button onClick={resetEditState} disabled={saving} className="btn-secondary w-full rounded-full px-6 py-3 text-sm font-medium">
+                      {t("common.cancel")}
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-8">
                   <div className="divide-y divide-slate-100">
-                    <DisplayItem label="User ID" value={userInfo?.user_id || "-"} />
-                    <DisplayItem label="หมายเลขพนักงาน" value={userInfo?.employee_number || "-"} />
-                    <DisplayItem label="ชื่อ - นามสกุล" value={userInfo?.full_name || "-"} />
-                    <DisplayItem
-                      label="เพศ"
-                      value={GENDER_OPTIONS.find((option) => option.value === userInfo?.gender)?.label || "-"}
-                    />
-                    <DisplayItem label="อีเมล" value={userInfo?.email || "-"} />
+                    <DisplayItem label={t("profile.userId")} value={userInfo?.user_id || "-"} />
+                    <DisplayItem label={t("profile.employeeNumber")} value={userInfo?.employee_number || "-"} />
+                    <DisplayItem label={t("profile.fullName")} value={userInfo?.full_name || "-"} />
+                    <DisplayItem label={t("profile.gender")} value={genderOptions.find((option) => option.value === userInfo?.gender)?.label || "-"} />
+                    <DisplayItem label={t("profile.email")} value={userInfo?.email || "-"} />
                   </div>
 
                   <div className="flex flex-col items-center gap-4 pt-6">
@@ -470,21 +435,10 @@ export default function ProfilePage() {
                       }}
                       className="btn-ghost-primary flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                        />
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                       </svg>
-                      <span>แก้ไขข้อมูลโปรไฟล์</span>
+                      <span>{t("profile.editProfile")}</span>
                     </button>
 
                     <button
@@ -495,7 +449,7 @@ export default function ProfilePage() {
                       disabled={saving}
                       className="btn-danger min-w-32 rounded-full px-6 py-3 text-sm font-medium"
                     >
-                      ออกจากระบบ
+                      {t("common.logout")}
                     </button>
                   </div>
                 </div>

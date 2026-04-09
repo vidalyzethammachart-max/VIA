@@ -2,18 +2,19 @@ import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { accountingService } from "../services/accountingService";
+import AuthPageControls from "../components/AuthPageControls";
 import { getUserRole } from "../hooks/useAuthRole";
 import { normalizeRole, roleAtLeast } from "../lib/roles";
+import { useLanguage } from "../i18n/LanguageProvider";
 
 import Logo from "../assets/logo_no_bg.png";
 
-const INVALID_LOGIN_MESSAGE =
-  "Your email or password are incorrect. Please try again!";
-
 export default function Login() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
@@ -21,6 +22,19 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+
+    const nextFieldErrors: { email?: string; password?: string } = {};
+    if (!email.trim()) {
+      nextFieldErrors.email = t("form.fillField");
+    }
+    if (!password.trim()) {
+      nextFieldErrors.password = t("form.fillField");
+    }
+    setFieldErrors(nextFieldErrors);
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
@@ -31,16 +45,18 @@ export default function Login() {
     });
 
     if (error) {
-      setErrorMessage(INVALID_LOGIN_MESSAGE);
+      setErrorMessage(t("auth.invalidLogin"));
       setLoading(false);
       return;
     }
 
     if (data.user) {
-      const role = normalizeRole(await getUserRole(data.user.id).catch((roleError) => {
-        console.error("Failed to load role after login:", roleError);
-        return "user";
-      }));
+      const role = normalizeRole(
+        await getUserRole(data.user.id).catch((roleError) => {
+          console.error("Failed to load role after login:", roleError);
+          return "user";
+        }),
+      );
 
       void accountingService
         .logActivity({
@@ -72,66 +88,80 @@ export default function Login() {
     navigate("/dashboard", { replace: true });
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    navigate("/register");
-  };
-
-  const handleEmailChange = (value: string) => {
-    setEmail(value);
-    if (errorMessage) setErrorMessage(null);
-  };
-
-  const handlePasswordChange = (value: string) => {
-    setPassword(value);
-    if (errorMessage) setErrorMessage(null);
-  };
-
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb]">
-      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-[#ffffff] px-4 py-12 shadow-lg shadow-gray-200/50">
-        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 shadow-4xl backdrop-blur-lg">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb] dark:bg-slate-950">
+      <AuthPageControls />
+      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-white px-4 py-12 dark:border-slate-800 dark:bg-slate-900">
+        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 backdrop-blur-lg">
           <div className="flex justify-center p-2">
             <img src={Logo} alt="Logo" className="h-auto w-100" />
           </div>
           <div>
-            <h2 className="mb-6 text-center text-2xl font-bold text-black">
-              VIDEO INTELLIGENCE &amp; ANALYTICS
+            <h2 className="mb-6 text-center text-2xl font-bold text-black dark:text-white">
+              {t("auth.loginTitle")}
             </h2>
           </div>
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form noValidate onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="mb-1 block font-medium text-gray-600">E-mail</label>
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.email")}
+              </label>
               <input
-                type="text"
+                type="email"
                 value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                  if (fieldErrors.email) {
+                    setFieldErrors((current) => ({ ...current, email: undefined }));
+                  }
+                }}
                 disabled={loading}
-                className="w-full rounded-lg border border-gray-500 bg-[#ffffff] px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] disabled:opacity-70"
-                placeholder="Enter your email"
+                className={`w-full rounded-lg border bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 disabled:opacity-70 dark:bg-slate-950 dark:text-white ${
+                  fieldErrors.email
+                    ? "border-red-400 focus:ring-red-200 dark:border-red-500/60"
+                    : "border-gray-500 focus:ring-[#04418b] dark:border-slate-700"
+                }`}
+                placeholder={t("auth.enterEmail")}
                 autoComplete="email"
                 required
               />
+              {fieldErrors.email && (
+                <p className="mt-2 text-sm text-red-500 dark:text-red-400">{fieldErrors.email}</p>
+              )}
             </div>
             <div>
-              <label className="mb-1 block font-medium text-gray-600">Password</label>
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.password")}
+              </label>
               <input
                 type="password"
                 value={password}
-                onChange={(e) => handlePasswordChange(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                  if (fieldErrors.password) {
+                    setFieldErrors((current) => ({ ...current, password: undefined }));
+                  }
+                }}
                 disabled={loading}
-                className={`w-full rounded-lg border bg-[#ffffff] px-4 py-2 text-black focus:outline-none focus:ring-1 disabled:opacity-70 ${
-                  errorMessage
-                    ? "border-red-300 bg-red-50 focus:ring-red-200"
-                    : "border-gray-500 focus:ring-[#04418b]"
+                className={`w-full rounded-lg border bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 disabled:opacity-70 dark:bg-slate-950 dark:text-white ${
+                  fieldErrors.password
+                    ? "border-red-400 bg-red-50 focus:ring-red-200 dark:border-red-500/60 dark:bg-red-950/20"
+                    : errorMessage
+                      ? "border-red-300 bg-red-50 focus:ring-red-200 dark:border-red-500/60 dark:bg-red-950/20"
+                    : "border-gray-500 focus:ring-[#04418b] dark:border-slate-700"
                 }`}
-                placeholder="Enter your password"
+                placeholder={t("auth.enterPassword")}
                 autoComplete="current-password"
                 required
               />
+              {fieldErrors.password && (
+                <p className="mt-2 text-sm text-red-500 dark:text-red-400">{fieldErrors.password}</p>
+              )}
               {errorMessage && (
                 <div
-                  className="mt-2 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-600"
+                  className="mt-2 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/40 dark:bg-red-950/30 dark:text-red-300"
                   role="alert"
                 >
                   <svg
@@ -150,29 +180,25 @@ export default function Login() {
                 </div>
               )}
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-[#04418b] py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#04416b] motion-safe:active:scale-[0.98]"
-            >
-              {loading ? "Logging in..." : "Login"}
+            <button type="submit" disabled={loading} className="btn-primary w-full rounded-lg py-2">
+              {loading ? t("auth.loggingIn") : t("auth.login")}
             </button>
             <button
               type="button"
               disabled={loading}
-              className="w-full rounded-lg bg-[#1a5fb4] py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#04416b] motion-safe:active:scale-[0.98]"
-              onClick={handleRegister}
+              className="btn-secondary w-full rounded-lg py-2"
+              onClick={() => navigate("/register")}
             >
-              Register
+              {t("auth.register")}
             </button>
             <div className="mt-2 text-center">
               <button
                 type="button"
                 onClick={() => navigate("/forgot-password")}
                 disabled={loading}
-                className="text-sm font-medium text-[#04418b] disabled:opacity-60 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:text-[#04416b]"
+                className="text-sm font-medium text-[#04418b] disabled:opacity-60 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:text-[#04416b] dark:text-sky-400 dark:hover:text-sky-300"
               >
-                ลืมรหัสผ่านใช่หรือไม่?
+                {t("auth.forgotPassword")}
               </button>
             </div>
           </form>

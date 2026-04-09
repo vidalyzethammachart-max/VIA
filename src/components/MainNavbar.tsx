@@ -3,17 +3,16 @@ import { Link } from "react-router-dom";
 import Logo from "../assets/logo.png";
 import ProfileDropdown from "./ProfileDropdown";
 import { useTheme } from "../theme/ThemeProvider";
+import { useLanguage } from "../i18n/LanguageProvider";
 
 type MainNavbarProps = {
   title?: string;
   subtitle?: string;
 };
 
-export default function MainNavbar({
-  title = "ประเมินและวิเคราะห์วิดีโออัจฉริยะ",
-  subtitle = "ระบบประเมินคุณภาพสื่อดิจิทัลด้านเทคนิคเพื่อการศึกษา",
-}: MainNavbarProps) {
+export default function MainNavbar({ title, subtitle }: MainNavbarProps) {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const isDark = theme === "dark";
 
   return (
@@ -31,22 +30,26 @@ export default function MainNavbar({
           </Link>
 
           <div className="flex flex-col">
-            <span className={`text-xs font-semibold tracking-wide ${isDark ? "text-white" : "text-primary"}`}>
-              Video Intelligence &amp; Analytics
+            <span
+              className={`text-xs font-semibold tracking-wide ${
+                isDark ? "text-white" : "text-primary"
+              }`}
+            >
+              {t("navbar.brand")}
             </span>
             <h1
               className={`text-lg font-semibold md:text-xl ${
                 isDark ? "text-slate-100" : "text-slate-900"
               }`}
             >
-              {title}
+              {title ?? t("navbar.title")}
             </h1>
             <p
               className={`text-xs md:text-sm ${
                 isDark ? "text-slate-400" : "text-slate-500"
               }`}
             >
-              {subtitle}
+              {subtitle ?? t("navbar.subtitle")}
             </p>
           </div>
 

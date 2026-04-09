@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 
 import MainNavbar from "../components/MainNavbar";
+import { useLanguage } from "../i18n/LanguageProvider";
 import { supabase } from "../lib/supabaseClient";
 
 type PreviewRecord = {
@@ -25,6 +26,7 @@ type ArtifactUrls = {
 
 export default function PreviewPage() {
   const location = useLocation();
+  const { t } = useLanguage();
   const { docId } = useParams<{ docId: string }>();
   const evaluationId = Number(docId);
   const [loading, setLoading] = useState(true);
@@ -36,7 +38,7 @@ export default function PreviewPage() {
   useEffect(() => {
     const loadPreview = async () => {
       if (!Number.isInteger(evaluationId) || evaluationId <= 0) {
-        setErrorMessage("Invalid preview request.");
+        setErrorMessage(t("preview.invalidRequest"));
         setLoading(false);
         return;
       }
@@ -54,7 +56,7 @@ export default function PreviewPage() {
       }
 
       if (!data) {
-        setErrorMessage("Preview not found.");
+        setErrorMessage(t("preview.notFound"));
         setLoading(false);
         return;
       }
@@ -64,7 +66,7 @@ export default function PreviewPage() {
     };
 
     void loadPreview();
-  }, [evaluationId]);
+  }, [evaluationId, t]);
 
   useEffect(() => {
     if (!record || record.document_status !== "pending") {
@@ -110,9 +112,7 @@ export default function PreviewPage() {
 
       if (error || !data?.ok) {
         setArtifactUrls(null);
-        setErrorMessage(
-          data?.error || error?.message || "Failed to resolve document artifact URLs.",
-        );
+        setErrorMessage(data?.error || error?.message || t("preview.resolveFailed"));
         setArtifactLoading(false);
         return;
       }
@@ -127,7 +127,7 @@ export default function PreviewPage() {
     };
 
     void loadArtifactUrls();
-  }, [record]);
+  }, [record, t]);
 
   const fallbackGoogleUrls = useMemo(() => {
     if (!record?.google_doc_id) {
@@ -147,29 +147,26 @@ export default function PreviewPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <MainNavbar
-        title="Document Preview"
-        subtitle="Preview the generated Google Document linked to this evaluation."
-      />
+      <MainNavbar title={t("preview.title")} subtitle={t("preview.subtitle")} />
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 md:py-8">
         <section className="ui-hover-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Evaluation document
+                {t("preview.documentLabel")}
               </p>
               <h2 className="mt-1 text-lg font-semibold text-slate-900 md:text-xl">
-                {record?.subject_name || "Generated Google Doc"}
+                {record?.subject_name || t("preview.generatedDoc")}
               </h2>
               {location.state && "generated" in (location.state as Record<string, unknown>) && (
                 <p className="mt-2 text-sm font-medium text-emerald-600">
-                  Document generated successfully.
+                  {t("preview.generatedSuccess")}
                 </p>
               )}
               {artifactUrls?.source === "storage" && (
                 <p className="mt-2 text-sm font-medium text-slate-500">
-                  Preview source: stored PDF artifact
+                  {t("preview.storageSource")}
                 </p>
               )}
             </div>
@@ -184,7 +181,7 @@ export default function PreviewPage() {
                       rel="noreferrer"
                       className="btn-primary text-center"
                     >
-                      Download DOCX
+                      {t("preview.downloadDocx")}
                     </a>
                   )}
                   {artifactUrls.pdfUrl && (
@@ -194,16 +191,13 @@ export default function PreviewPage() {
                       rel="noreferrer"
                       className="btn-secondary text-center"
                     >
-                      Download PDF
+                      {t("preview.downloadPdf")}
                     </a>
                   )}
                 </>
               )}
-              <Link
-                to="/my-forms"
-                className="btn-secondary text-center"
-              >
-                Back to My Forms
+              <Link to="/my-forms" className="btn-secondary text-center">
+                {t("preview.backToMyForms")}
               </Link>
             </div>
           </div>
@@ -211,7 +205,7 @@ export default function PreviewPage() {
 
         {loading ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-            Loading preview...
+            {t("preview.loading")}
           </section>
         ) : errorMessage ? (
           <section className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700 shadow-sm">
@@ -219,17 +213,15 @@ export default function PreviewPage() {
           </section>
         ) : record?.document_status === "failed" ? (
           <section className="rounded-2xl border border-red-200 bg-red-50 p-8 shadow-sm">
-            <h3 className="text-base font-semibold text-red-800">Document generation failed</h3>
+            <h3 className="text-base font-semibold text-red-800">{t("preview.generationFailed")}</h3>
             <p className="mt-2 text-sm text-red-700">
-              {record.document_error || "The generator did not return a document."}
+              {record.document_error || t("preview.generatorNoDoc")}
             </p>
           </section>
         ) : record?.document_status !== "ready" || artifactLoading ? (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-sm">
-            <h3 className="text-base font-semibold text-amber-900">Document still processing</h3>
-            <p className="mt-2 text-sm text-amber-800">
-              The evaluation was saved. This page checks for updates automatically every few seconds.
-            </p>
+            <h3 className="text-base font-semibold text-amber-900">{t("preview.processingTitle")}</h3>
+            <p className="mt-2 text-sm text-amber-800">{t("preview.processingDesc")}</p>
           </section>
         ) : artifactUrls?.previewUrl ? (
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -249,7 +241,7 @@ export default function PreviewPage() {
           </section>
         ) : (
           <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-            No preview artifact is available yet.
+            {t("preview.noArtifact")}
           </section>
         )}
       </main>

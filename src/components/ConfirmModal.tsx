@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useLanguage } from "../i18n/LanguageProvider";
 
 type ConfirmModalProps = {
   isOpen: boolean;
@@ -10,6 +11,7 @@ type ConfirmModalProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   confirmDisabled?: boolean;
+  variant?: "danger" | "primary";
 };
 
 export default function ConfirmModal({
@@ -18,10 +20,14 @@ export default function ConfirmModal({
   message,
   onConfirm,
   onCancel,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   confirmDisabled = false,
+  variant = "danger",
 }: ConfirmModalProps) {
+  const { t } = useLanguage();
+  const isPrimary = variant === "primary";
+
   useEffect(() => {
     if (!isOpen || confirmDisabled) return;
 
@@ -60,34 +66,35 @@ export default function ConfirmModal({
             aria-labelledby="confirm-modal-title"
             aria-describedby="confirm-modal-message"
           >
-            <div className="bg-red-100 px-6 py-7 dark:bg-red-950/40">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-sm dark:bg-red-500/90">
-                <svg
-                  className="h-7 w-7"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-10.75a.75.75 0 00-1.5 0v4.25a.75.75 0 001.5 0V7.25zm0 7a.75.75 0 00-1.5 0v.25a.75.75 0 001.5 0v-.25z"
-                    clipRule="evenodd"
-                  />
+            <div className={`px-6 py-7 ${isPrimary ? "bg-[#04418b]/10 dark:bg-[#04418b]/20" : "bg-red-100 dark:bg-red-950/40"}`}>
+              <div
+                className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-white shadow-sm ${
+                  isPrimary ? "bg-[#04418b] dark:bg-[#04418b]" : "bg-red-500 dark:bg-red-500/90"
+                }`}
+              >
+                <svg className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  {isPrimary ? (
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-10.75a.75.75 0 00-1.5 0v4.25a.75.75 0 001.5 0V7.25zm0 7a.75.75 0 00-1.5 0v.25a.75.75 0 001.5 0v-.25z"
+                      clipRule="evenodd"
+                    />
+                  ) : (
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-10.75a.75.75 0 00-1.5 0v4.25a.75.75 0 001.5 0V7.25zm0 7a.75.75 0 00-1.5 0v.25a.75.75 0 001.5 0v-.25z"
+                      clipRule="evenodd"
+                    />
+                  )}
                 </svg>
               </div>
             </div>
 
             <div className="px-6 pb-6 pt-5">
-              <h2
-                id="confirm-modal-title"
-                className="text-center text-xl font-bold text-slate-900 dark:text-slate-100"
-              >
+              <h2 id="confirm-modal-title" className="text-center text-xl font-bold text-slate-900 dark:text-slate-100">
                 {title}
               </h2>
-              <p
-                id="confirm-modal-message"
-                className="mt-2 text-center text-sm leading-6 text-slate-500 dark:text-slate-400"
-              >
+              <p id="confirm-modal-message" className="mt-2 text-center text-sm leading-6 text-slate-500 dark:text-slate-400">
                 {message}
               </p>
 
@@ -98,15 +105,19 @@ export default function ConfirmModal({
                   disabled={confirmDisabled}
                   className="btn-secondary rounded-full px-5 py-2.5 text-sm font-medium"
                 >
-                  {cancelLabel}
+                  {cancelLabel ?? t("common.cancel")}
                 </button>
                 <button
                   type="button"
                   onClick={onConfirm}
                   disabled={confirmDisabled}
-                  className="btn-danger rounded-full px-5 py-2.5 text-sm font-semibold disabled:bg-red-300 dark:disabled:bg-red-900/40"
+                  className={`rounded-full px-5 py-2.5 text-sm font-semibold ${
+                    isPrimary
+                      ? "btn-primary disabled:bg-slate-400 dark:disabled:bg-slate-700"
+                      : "btn-danger disabled:bg-red-300 dark:disabled:bg-red-900/40"
+                  }`}
                 >
-                  {confirmDisabled ? "Processing..." : confirmLabel}
+                  {confirmDisabled ? t("common.processing") : confirmLabel ?? t("common.confirm")}
                 </button>
               </div>
             </div>

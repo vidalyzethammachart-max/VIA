@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import ConfirmModal from "../components/ConfirmModal";
 import MainNavbar from "../components/MainNavbar";
 import { SectionCard } from "../components/SectionCard";
-import { LIKERT_LABELS, SECTIONS, type LikertValue } from "../config/sections";
+import { getLikertLabels, getSections, type LikertValue } from "../config/sections";
+import { useLanguage } from "../i18n/LanguageProvider";
 import { normalizeRole, type AppRole } from "../lib/roles";
 import { supabase } from "../lib/supabaseClient";
 import { roleRequestService } from "../services/roleRequestService";
@@ -15,6 +17,10 @@ import {
 
 function FormSubmit() {
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
+  const sections = getSections(language);
+  const likertLabels = getLikertLabels(language);
+
   const [orderNumber, setOrderNumber] = useState("");
   const [subjectName, setSubjectName] = useState("");
   const [answers, setAnswers] = useState<
@@ -29,6 +35,7 @@ function FormSubmit() {
   const [isRequestingRole, setIsRequestingRole] = useState(false);
   const [roleRequestMessage, setRoleRequestMessage] = useState<string | null>(null);
   const [showValidation, setShowValidation] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data: { user } }) => {
@@ -52,19 +59,19 @@ function FormSubmit() {
 
   const handleToggleAnswer = (
     sectionId: string,
-    questionLabel: string,
+    questionId: string,
     value: LikertValue,
   ) => {
     setAnswers((prev) => {
       const sectionAnswers = prev[sectionId] || {};
-      const current = sectionAnswers[questionLabel];
+      const current = sectionAnswers[questionId];
       const nextValue = current === value ? undefined : value;
 
       return {
         ...prev,
         [sectionId]: {
           ...sectionAnswers,
-          [questionLabel]: nextValue,
+          [questionId]: nextValue,
         },
       };
     });
@@ -73,13 +80,13 @@ function FormSubmit() {
   const buildRubric = (): Rubric => {
     const rubric: Rubric = {};
 
-    SECTIONS.forEach((section) => {
+    sections.forEach((section) => {
       const sectionAnswers = answers[section.id] ?? {};
       rubric[section.id] = {};
 
       section.questions.forEach((question) => {
-        const value = sectionAnswers[question.label];
-        rubric[section.id][question.label] = typeof value === "number" ? value : null;
+        const value = sectionAnswers[question.id];
+        rubric[section.id][question.storageKey] = typeof value === "number" ? value : null;
       });
     });
 
@@ -88,30 +95,30 @@ function FormSubmit() {
 
   const validateForm = (): string | null => {
     if (!authUserId) {
-      return "Your session is not ready. Please sign in again and retry.";
+      return t("form.sessionNotReady");
     }
 
     if (!orderNumber.trim()) {
-      return "Please fill in the order number.";
+      return t("form.fillOrderNumber");
     }
 
     if (!subjectName.trim()) {
-      return "Please fill in the subject name.";
+      return t("form.fillSubjectName");
     }
 
-    for (const section of SECTIONS) {
+    for (const section of sections) {
       const sectionAnswers = answers[section.id] ?? {};
 
       for (const question of section.questions) {
-        const value = sectionAnswers[question.label];
+        const value = sectionAnswers[question.id];
         if (typeof value !== "number") {
-          return `Please answer every rubric question before submitting. Missing item: ${section.title}`;
+          return t("form.fillAllRubric", { section: section.title });
         }
       }
     }
 
     if (!comment.trim()) {
-      return "Please fill in the overall suggestion.";
+      return t("form.fillOverallSuggestion");
     }
 
     return null;
@@ -150,24 +157,16 @@ function FormSubmit() {
     }
 
     setSubmitErrorMessage(validateForm());
-  }, [authUserId, orderNumber, subjectName, answers, comment, showValidation]);
+  }, [authUserId, orderNumber, subjectName, answers, comment, showValidation, language]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const submitForm = async () => {
     setSubmitErrorMessage(null);
-
-    const validationError = validateForm();
-    if (validationError) {
-      setShowValidation(true);
-      setSubmitErrorMessage(validationError);
-      return;
-    }
 
     setIsSaving(true);
 
     const payload = buildPayload();
     if (!payload) {
-      setSubmitErrorMessage("Your session is not ready. Please sign in again and retry.");
+      setSubmitErrorMessage(t("form.sessionNotReady"));
       setIsSaving(false);
       return;
     }
@@ -181,12 +180,28 @@ function FormSubmit() {
       });
     } catch (error) {
       console.error("Error while saving:", error);
-      setSubmitErrorMessage(
-        error instanceof Error ? error.message : "Failed to submit the evaluation.",
-      );
+      setSubmitErrorMessage(error instanceof Error ? error.message : t("form.submitFailed"));
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const validationError = validateForm();
+    if (validationError) {
+      setShowValidation(true);
+      setSubmitErrorMessage(validationError);
+      return;
+    }
+
+    setShowSubmitConfirm(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowSubmitConfirm(false);
+    await submitForm();
   };
 
   const handleRequestEditorRole = async () => {
@@ -199,10 +214,10 @@ function FormSubmit() {
 
     try {
       await roleRequestService.requestRole("editor");
-      setRoleRequestMessage("Role request submitted. Please wait for admin review.");
+      setRoleRequestMessage(t("form.requestSubmitted"));
     } catch (requestError: unknown) {
       setRoleRequestMessage(
-        requestError instanceof Error ? requestError.message : "Failed to request role.",
+        requestError instanceof Error ? requestError.message : t("form.requestFailed"),
       );
     } finally {
       setIsRequestingRole(false);
@@ -212,14 +227,25 @@ function FormSubmit() {
   return (
     <div className="min-h-screen bg-slate-50">
       <MainNavbar />
+      <ConfirmModal
+        isOpen={showSubmitConfirm}
+        title={t("form.submitConfirmTitle")}
+        message={t("form.submitConfirmMessage")}
+        variant="primary"
+        onCancel={() => {
+          if (!isSaving) setShowSubmitConfirm(false);
+        }}
+        onConfirm={() => void handleConfirmSubmit()}
+        confirmLabel={t("form.submitConfirmAction")}
+        cancelLabel={t("common.cancel")}
+        confirmDisabled={isSaving}
+      />
 
       <main className="mx-auto max-w-5xl px-4 py-6 md:py-8">
         {userRole === "user" && (
           <section className="ui-hover-card mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
-            <h2 className="text-sm font-semibold text-slate-900">Need editor access?</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Submit a role request and wait for admin approval before using the form.
-            </p>
+            <h2 className="text-sm font-semibold text-slate-900">{t("form.needEditorTitle")}</h2>
+            <p className="mt-1 text-xs text-slate-500">{t("form.needEditorDescription")}</p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
               <button
                 type="button"
@@ -227,13 +253,10 @@ function FormSubmit() {
                 disabled={isRequestingRole}
                 className="btn-primary disabled:bg-slate-400"
               >
-                {isRequestingRole ? "Submitting..." : "Request Editor Role"}
+                {isRequestingRole ? t("form.requestSubmitting") : t("form.requestEditorRole")}
               </button>
-              <Link
-                to="/role-requests"
-                className="btn-secondary text-center font-medium"
-              >
-                View Requests
+              <Link to="/role-requests" className="btn-secondary text-center font-medium">
+                {t("form.viewRequests")}
               </Link>
             </div>
             {roleRequestMessage && (
@@ -246,17 +269,11 @@ function FormSubmit() {
           <section className="ui-hover-card mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Submission workspace</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Completed documents are stored on each evaluation and can be reopened from your
-                  forms dashboard.
-                </p>
+                <h2 className="text-sm font-semibold text-slate-900">{t("form.workspaceTitle")}</h2>
+                <p className="mt-1 text-xs text-slate-500">{t("form.workspaceDescription")}</p>
               </div>
-              <Link
-                to="/my-forms"
-                className="btn-primary text-center"
-              >
-                Go to My Forms
+              <Link to="/my-forms" className="btn-primary text-center">
+                {t("form.goToMyForms")}
               </Link>
             </div>
           </section>
@@ -266,11 +283,11 @@ function FormSubmit() {
           <section className="ui-hover-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end">
               <div className="space-y-1 md:w-40">
-                <label className="text-xs font-medium text-slate-700">Order number</label>
+                <label className="text-xs font-medium text-slate-700">{t("form.orderNumber")}</label>
                 <input
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
-                  placeholder="e.g. 1"
+                  placeholder={t("form.orderPlaceholder")}
                   required
                   aria-invalid={isOrderNumberInvalid}
                   className={`w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 ${
@@ -280,16 +297,16 @@ function FormSubmit() {
                   }`}
                 />
                 {isOrderNumberInvalid && (
-                  <p className="text-xs font-medium text-red-600">Please fill out this field.</p>
+                  <p className="text-xs font-medium text-red-600">{t("form.fillField")}</p>
                 )}
               </div>
 
               <div className="flex-1 space-y-1">
-                <label className="text-xs font-medium text-slate-700">Subject name</label>
+                <label className="text-xs font-medium text-slate-700">{t("form.subjectName")}</label>
                 <input
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
-                  placeholder="e.g. Video Test"
+                  placeholder={t("form.subjectPlaceholder")}
                   required
                   aria-invalid={isSubjectNameInvalid}
                   className={`w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 ${
@@ -299,7 +316,7 @@ function FormSubmit() {
                   }`}
                 />
                 {isSubjectNameInvalid && (
-                  <p className="text-xs font-medium text-red-600">Please fill out this field.</p>
+                  <p className="text-xs font-medium text-red-600">{t("form.fillField")}</p>
                 )}
               </div>
             </div>
@@ -308,12 +325,9 @@ function FormSubmit() {
           <section className="ui-hover-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-slate-900 md:text-base">
-                Evaluation rubric
+                {t("form.rubricTitle")}
               </h2>
-              <p className="text-xs text-slate-600 md:text-sm">
-                Score each question on a 1-5 scale. The generated document will use these values
-                immediately after submission.
-              </p>
+              <p className="text-xs text-slate-600 md:text-sm">{t("form.rubricDescription")}</p>
             </div>
 
             <div className="flex flex-wrap gap-2 text-xs text-slate-600 md:text-sm">
@@ -325,31 +339,29 @@ function FormSubmit() {
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">
                     {v}
                   </span>
-                  <span>{LIKERT_LABELS[v]}</span>
+                  <span>{likertLabels[v]}</span>
                 </div>
               ))}
             </div>
           </section>
 
           <section className="space-y-5">
-            {SECTIONS.map((section) => (
+            {sections.map((section) => (
               <SectionCard
                 key={section.id}
                 section={section}
                 answers={answers[section.id] || {}}
                 showValidation={showValidation}
-                onToggle={(questionLabel, value) =>
-                  handleToggleAnswer(section.id, questionLabel, value)
+                onToggle={(questionId, value) =>
+                  handleToggleAnswer(section.id, questionId, value)
                 }
               />
             ))}
           </section>
 
           <section className="ui-hover-card space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
-            <label className="text-sm font-semibold text-slate-800">Overall suggestion</label>
-            <p className="text-xs text-slate-500">
-              Provide summary notes, highlights, risks, and any recommended improvements.
-            </p>
+            <label className="text-sm font-semibold text-slate-800">{t("form.overallSuggestion")}</label>
+            <p className="text-xs text-slate-500">{t("form.overallSuggestionDescription")}</p>
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
@@ -361,10 +373,10 @@ function FormSubmit() {
                   ? "border border-red-400 focus:border-red-400 focus:ring-red-200 dark:border-red-500 dark:focus:border-red-500 dark:focus:ring-red-950/40"
                   : "border border-slate-200 focus:border-primary focus:ring-primary/60 dark:border-slate-700"
               }`}
-              placeholder="Summarize the main findings for the generated document."
+              placeholder={t("form.overallSuggestionPlaceholder")}
             />
             {isCommentInvalid && (
-              <p className="text-xs font-medium text-red-600">Please fill out this field.</p>
+              <p className="text-xs font-medium text-red-600">{t("form.fillField")}</p>
             )}
           </section>
 
@@ -373,17 +385,17 @@ function FormSubmit() {
               !isOrderNumberInvalid &&
               !isSubjectNameInvalid &&
               !isCommentInvalid && (
-              <div className="mb-4 w-full rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
-                {submitErrorMessage}
-              </div>
-            )}
+                <div className="mb-4 w-full rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+                  {submitErrorMessage}
+                </div>
+              )}
             <div className="flex justify-center">
               <button
                 type="submit"
                 disabled={isSaving}
                 className="btn-primary rounded-full px-6 py-2 text-base shadow-md"
               >
-                {isSaving ? "Generating document..." : "Submit Evaluation"}
+                {isSaving ? t("form.generating") : t("form.submit")}
               </button>
             </div>
           </div>

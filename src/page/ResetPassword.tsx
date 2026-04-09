@@ -5,6 +5,8 @@ import Logo from "../assets/logo_no_bg.png";
 import { accountingService } from "../services/accountingService";
 import AuthAlert from "../components/AuthAlert";
 import AuthModal from "../components/AuthModal";
+import AuthPageControls from "../components/AuthPageControls";
+import { useLanguage } from "../i18n/LanguageProvider";
 import {
   getPasswordUpdateErrorMessage,
   MIN_PASSWORD_LENGTH,
@@ -15,6 +17,7 @@ import {
 type RecoveryState = "checking" | "ready" | "expired";
 
 export default function ResetPassword() {
+  const { t } = useLanguage();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,7 +62,7 @@ export default function ResetPassword() {
         }
 
         setRecoveryState("expired");
-        setPageError("This reset link is invalid or expired. Request a new password reset email.");
+        setPageError(t("auth.resetLinkExpired"));
       }, RECOVERY_SESSION_WAIT_MS);
     };
 
@@ -83,7 +86,7 @@ export default function ResetPassword() {
       }
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [t]);
 
   const logResetFailed = async (reason: string) => {
     const {
@@ -114,9 +117,7 @@ export default function ResetPassword() {
     const validationMessage = validatePasswordReset(password, confirmPassword);
     if (validationMessage) {
       setModalError(validationMessage);
-      const reason = validationMessage.includes("match")
-        ? "password_mismatch"
-        : "weak_password";
+      const reason = validationMessage.includes("match") ? "password_mismatch" : "weak_password";
       await logResetFailed(reason);
       return;
     }
@@ -163,7 +164,7 @@ export default function ResetPassword() {
           });
       }
 
-      setMessage("Password updated successfully. Redirecting to login...");
+      setMessage(t("auth.resetSuccess"));
 
       setTimeout(async () => {
         await supabase.auth.signOut();
@@ -178,49 +179,40 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb]">
-      {modalError && (
-        <AuthModal
-          message={modalError}
-          onClose={() => setModalError("")}
-        />
-      )}
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb] dark:bg-slate-950">
+      <AuthPageControls />
+      {modalError && <AuthModal message={modalError} onClose={() => setModalError("")} />}
 
-      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-[#ffffff] px-4 py-12 shadow-lg shadow-gray-200/50">
-        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 shadow-4xl backdrop-blur-lg">
+      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-white px-4 py-12 dark:border-slate-800 dark:bg-slate-900">
+        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 backdrop-blur-lg">
           <div className="mb-4 flex justify-center p-2">
             <img src={Logo} alt="Logo" className="h-auto w-100" />
           </div>
           <div>
-            <h2 className="mb-2 text-center text-2xl font-bold text-black">
-              Reset Password
+            <h2 className="mb-2 text-center text-2xl font-bold text-black dark:text-white">
+              {t("auth.resetPasswordTitle")}
             </h2>
-            <p className="mb-6 text-center text-sm text-gray-500">
-              Set your new password.
+            <p className="mb-6 text-center text-sm text-gray-500 dark:text-slate-400">
+              {t("auth.resetPasswordSubtitle")}
             </p>
           </div>
 
           {message && <AuthAlert variant="success" message={message} />}
-
           {pageError && <AuthAlert variant="error" message={pageError} />}
-
-          {isCheckingRecovery && (
-            <AuthAlert
-              variant="info"
-              message="Verifying your reset link. This can take a moment."
-            />
-          )}
+          {isCheckingRecovery && <AuthAlert variant="info" message={t("auth.resetLinkChecking")} />}
 
           <form onSubmit={handleUpdate} className="space-y-5">
             <div>
-              <label className="mb-1 block font-medium text-gray-600">New Password</label>
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.newPassword")}
+              </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading || !hasRecoverySession}
-                className="w-full rounded-lg border border-gray-500 bg-[#ffffff] px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b]"
-                placeholder="Enter new password"
+                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                placeholder={t("auth.enterNewPassword")}
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 required
@@ -228,14 +220,16 @@ export default function ResetPassword() {
             </div>
 
             <div>
-              <label className="mb-1 block font-medium text-gray-600">Confirm Password</label>
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.confirmPassword")}
+              </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={loading || !hasRecoverySession}
-                className="w-full rounded-lg border border-gray-500 bg-[#ffffff] px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b]"
-                placeholder="Confirm new password"
+                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                placeholder={t("auth.confirmNewPassword")}
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 required
@@ -245,18 +239,18 @@ export default function ResetPassword() {
             <button
               type="submit"
               disabled={loading || !!message || !hasRecoverySession}
-              className="w-full rounded-lg bg-[#04418b] py-2 font-semibold text-white disabled:opacity-50 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#04416b] motion-safe:active:scale-[0.98]"
+              className="btn-primary w-full rounded-lg py-2 disabled:opacity-50"
             >
-              {loading ? "Updating..." : "Update Password"}
+              {loading ? t("auth.updating") : t("auth.updatePassword")}
             </button>
 
             {recoveryState === "expired" && (
               <button
                 type="button"
-                className="w-full rounded-lg border border-gray-300 bg-transparent py-2 font-semibold text-gray-600 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-gray-100 motion-safe:active:scale-[0.98]"
+                className="btn-secondary w-full rounded-lg py-2"
                 onClick={() => navigate("/forgot-password")}
               >
-                Request New Reset Link
+                {t("auth.requestNewResetLink")}
               </button>
             )}
           </form>

@@ -4,12 +4,15 @@ import { useNavigate } from "react-router-dom";
 import Logo from "../assets/logo_no_bg.png";
 import { accountingService } from "../services/accountingService";
 import AuthAlert from "../components/AuthAlert";
+import AuthPageControls from "../components/AuthPageControls";
+import { useLanguage } from "../i18n/LanguageProvider";
 import {
   getPasswordResetRequestErrorMessage,
   RESET_EMAIL_COOLDOWN_MS,
 } from "../utils/passwordReset";
 
 export default function ForgotPassword() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -30,12 +33,9 @@ export default function ForgotPassword() {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        normalizedEmail,
-        {
-          redirectTo: `${window.location.origin}/reset-password`,
-        },
-      );
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
       if (resetError) {
         setError(getPasswordResetRequestErrorMessage());
@@ -43,11 +43,8 @@ export default function ForgotPassword() {
       }
 
       setCooldownUntil(Date.now() + RESET_EMAIL_COOLDOWN_MS);
-      setMessage(
-        "If an account exists for that email, a password reset link has been sent.",
-      );
+      setMessage(t("auth.resetEmailSentGeneric"));
 
-      // Best effort logging: available only when user is authenticated.
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -72,60 +69,52 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb]">
-      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-[#ffffff] px-4 py-12 shadow-lg shadow-gray-200/50">
-        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 shadow-4xl backdrop-blur-lg">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb] dark:bg-slate-950">
+      <AuthPageControls />
+      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-white px-4 py-12 dark:border-slate-800 dark:bg-slate-900">
+        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 backdrop-blur-lg">
           <div className="mb-4 flex justify-center p-2">
             <img src={Logo} alt="Logo" className="h-auto w-100" />
           </div>
           <div>
-            <h2 className="mb-2 text-center text-2xl font-bold text-black">
-              Forgot Password
+            <h2 className="mb-2 text-center text-2xl font-bold text-black dark:text-white">
+              {t("auth.forgotPasswordTitle")}
             </h2>
-            <p className="mb-6 text-center text-sm text-gray-500">
-              Enter your email to receive a password reset link.
+            <p className="mb-6 text-center text-sm text-gray-500 dark:text-slate-400">
+              {t("auth.forgotPasswordSubtitle")}
             </p>
           </div>
 
           {message && <AuthAlert variant="success" message={message} />}
-
           {error && <AuthAlert variant="error" message={error} />}
-
-          {isCoolingDown && !error && (
-            <AuthAlert
-              variant="info"
-              message="Please wait a few seconds before requesting another reset email."
-            />
-          )}
+          {isCoolingDown && !error && <AuthAlert variant="info" message={t("auth.resetCooldown")} />}
 
           <form onSubmit={handleReset} className="space-y-5">
             <div>
-              <label className="mb-1 block font-medium text-gray-600">E-mail</label>
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.email")}
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
-                className="w-full rounded-lg border border-gray-500 bg-[#ffffff] px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b]"
-                placeholder="Enter your email"
+                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                placeholder={t("auth.enterEmail")}
                 autoComplete="email"
                 required
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading || isCoolingDown}
-              className="w-full rounded-lg bg-[#04418b] py-2 font-semibold text-white disabled:opacity-50 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-[#04416b] motion-safe:active:scale-[0.98]"
-            >
-              {loading ? "Sending..." : "Send Reset Link"}
+            <button type="submit" disabled={loading || isCoolingDown} className="btn-primary w-full rounded-lg py-2">
+              {loading ? t("auth.sending") : t("auth.sendResetLink")}
             </button>
             <button
               type="button"
-              className="w-full rounded-lg border border-gray-300 bg-transparent py-2 font-semibold text-gray-600 motion-safe:transition motion-safe:duration-200 motion-safe:ease-in-out motion-safe:hover:scale-[1.02] motion-safe:hover:bg-gray-100 motion-safe:active:scale-[0.98]"
+              className="btn-secondary w-full rounded-lg py-2"
               onClick={() => navigate("/")}
             >
-              Back to Login
+              {t("auth.backToLogin")}
             </button>
           </form>
         </div>

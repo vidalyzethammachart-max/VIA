@@ -16,6 +16,7 @@ import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuthRole } from "./hooks/useAuthRole";
 import { roleAtLeast, type AppRole } from "./lib/roles";
+import { useLanguage } from "./i18n/LanguageProvider";
 
 function getDefaultRouteForRole(role: AppRole | null): string {
   if (!role) return "/";
@@ -26,8 +27,9 @@ function getDefaultRouteForRole(role: AppRole | null): string {
 
 export default function App() {
   const { loading, session, role } = useAuthRole();
+  const { t } = useLanguage();
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <p>{t("common.loading")}</p>;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">

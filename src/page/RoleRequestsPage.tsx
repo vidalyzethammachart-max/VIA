@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+
+import ConfirmModal from "../components/ConfirmModal";
+import MainNavbar from "../components/MainNavbar";
+import { useLanguage } from "../i18n/LanguageProvider";
 import { normalizeRole, roleAtLeast, type AppRole } from "../lib/roles";
+import { supabase } from "../lib/supabaseClient";
 import {
   roleRequestService,
   type RoleRequestRow,
   type RoleRequestStatus,
 } from "../services/roleRequestService";
-import MainNavbar from "../components/MainNavbar";
-import ConfirmModal from "../components/ConfirmModal";
 
 type UserInfoMap = Record<string, { email: string | null; role: AppRole }>;
 
 export default function RoleRequestsPage() {
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -76,8 +79,7 @@ export default function RoleRequestsPage() {
         setUserInfoMap(map);
       }
     } catch (loadError: unknown) {
-      const message = loadError instanceof Error ? loadError.message : "Failed to load role requests.";
-      setError(message);
+      setError(loadError instanceof Error ? loadError.message : t("role.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -90,8 +92,7 @@ export default function RoleRequestsPage() {
       await roleRequestService.requestRole("editor");
       await loadPage();
     } catch (requestError: unknown) {
-      const message = requestError instanceof Error ? requestError.message : "Failed to request role.";
-      setError(message);
+      setError(requestError instanceof Error ? requestError.message : t("role.requestFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -108,8 +109,7 @@ export default function RoleRequestsPage() {
       }
       await loadPage();
     } catch (reviewError: unknown) {
-      const message = reviewError instanceof Error ? reviewError.message : "Failed to review request.";
-      setError(message);
+      setError(reviewError instanceof Error ? reviewError.message : t("role.reviewFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -125,8 +125,7 @@ export default function RoleRequestsPage() {
       setCancelRequestId(null);
       await loadPage();
     } catch (cancelError: unknown) {
-      const message = cancelError instanceof Error ? cancelError.message : "Failed to cancel request.";
-      setError(message);
+      setError(cancelError instanceof Error ? cancelError.message : t("role.cancelFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -136,28 +135,25 @@ export default function RoleRequestsPage() {
     <div className="min-h-screen bg-slate-50">
       <ConfirmModal
         isOpen={Boolean(cancelRequestId)}
-        title="Cancel role request?"
-        message="This pending role request will be cancelled and removed from admin review. You can submit a new request later."
+        title={t("role.cancelTitle")}
+        message={t("role.cancelMessage")}
         onCancel={() => {
           if (!submitting) setCancelRequestId(null);
         }}
         onConfirm={() => void handleCancelRequest()}
-        confirmLabel="Yes, cancel request"
-        cancelLabel="Keep request"
+        confirmLabel={t("role.confirmCancel")}
+        cancelLabel={t("role.keepRequest")}
         confirmDisabled={submitting}
       />
 
       <MainNavbar />
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold text-slate-900">Role Requests</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t("role.title")}</h1>
           <div className="flex gap-2">
             {isAdmin && (
-              <Link
-                to="/admin-dashboard"
-                className="btn-primary"
-              >
-                Admin Dashboard
+              <Link to="/admin-dashboard" className="btn-primary">
+                {t("role.adminDashboard")}
               </Link>
             )}
           </div>
@@ -165,9 +161,9 @@ export default function RoleRequestsPage() {
 
         {!isAdmin && (
           <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold text-slate-800">Request Role Upgrade</h2>
+            <h2 className="text-sm font-semibold text-slate-800">{t("role.requestUpgrade")}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Current role: <span className="font-semibold text-slate-700">{currentRole}</span>
+              {t("role.currentRole", { role: currentRole })}
             </p>
             <button
               onClick={handleRequestEditorRole}
@@ -175,10 +171,10 @@ export default function RoleRequestsPage() {
               className="btn-primary mt-4 disabled:bg-slate-400 dark:disabled:bg-slate-700"
             >
               {pendingRequest
-                ? "Request Pending"
+                ? t("role.requestPending")
                 : roleAtLeast(currentRole, "editor")
-                  ? "Already Editor/Admin"
-                  : "Request Editor Role"}
+                  ? t("role.alreadyEditor")
+                  : t("role.requestEditor")}
             </button>
           </section>
         )}
@@ -192,21 +188,21 @@ export default function RoleRequestsPage() {
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-800">
-              {isAdmin ? "All Role Requests" : "My Role Requests"}
+              {isAdmin ? t("role.allRequests") : t("role.myRequests")}
             </h2>
           </div>
           {loading ? (
-            <div className="px-4 py-8 text-sm text-slate-500">Loading requests...</div>
+            <div className="px-4 py-8 text-sm text-slate-500">{t("role.loading")}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-100 text-left text-slate-600">
                   <tr>
-                    {isAdmin && <th className="px-4 py-3">User</th>}
-                    <th className="px-4 py-3">Requested Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Created At</th>
-                    <th className="px-4 py-3">Action</th>
+                    {isAdmin && <th className="px-4 py-3">{t("role.user")}</th>}
+                    <th className="px-4 py-3">{t("role.requestedRole")}</th>
+                    <th className="px-4 py-3">{t("role.status")}</th>
+                    <th className="px-4 py-3">{t("role.createdAt")}</th>
+                    <th className="px-4 py-3">{t("role.action")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -222,7 +218,7 @@ export default function RoleRequestsPage() {
                         <StatusBadge status={request.status} />
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {new Date(request.created_at).toLocaleString()}
+                        {new Date(request.created_at).toLocaleString(language === "th" ? "th-TH" : "en-US")}
                       </td>
                       <td className="px-4 py-3">
                         {isAdmin ? (
@@ -233,18 +229,18 @@ export default function RoleRequestsPage() {
                                 disabled={submitting}
                                 className="btn-primary rounded-lg px-3 py-1 text-xs"
                               >
-                                Approve
+                                {t("role.approve")}
                               </button>
                               <button
                                 onClick={() => void handleReview(request.id, "rejected")}
                                 disabled={submitting}
                                 className="btn-danger rounded-lg px-3 py-1 text-xs"
                               >
-                                Reject
+                                {t("role.reject")}
                               </button>
                             </div>
                           ) : (
-                            <span className="text-xs text-slate-400">Reviewed</span>
+                            <span className="text-xs text-slate-400">{t("role.reviewed")}</span>
                           )
                         ) : request.status === "pending" ? (
                           <button
@@ -252,7 +248,7 @@ export default function RoleRequestsPage() {
                             disabled={submitting}
                             className="btn-danger rounded-lg px-3 py-1 text-xs"
                           >
-                            Cancel
+                            {t("role.cancel")}
                           </button>
                         ) : (
                           <span className="text-xs text-slate-400">-</span>
@@ -263,7 +259,7 @@ export default function RoleRequestsPage() {
                   {requests.length === 0 && (
                     <tr>
                       <td className="px-4 py-6 text-slate-500" colSpan={isAdmin ? 5 : 4}>
-                        No role requests found.
+                        {t("role.noRequests")}
                       </td>
                     </tr>
                   )}
