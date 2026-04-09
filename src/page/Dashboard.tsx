@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { SECTIONS } from "../config/sections";
 
-// Type definitions
+import { accountingService } from "../services/accountingService";
+import MainNavbar from "../components/MainNavbar";
+import { useAuthRole } from "../hooks/useAuthRole";
+import { roleAtLeast } from "../lib/roles";
+import { getSections } from "../config/sections";
+import { useLanguage } from "../i18n/LanguageProvider";
+
 type RubricValue = number | null;
 type RubricData = {
   [sectionId: string]: {
@@ -13,14 +18,15 @@ type RubricData = {
 
 type EvaluationRow = {
   id: number;
-  rubric: RubricData; // JSONB
+  rubric: RubricData;
   created_at: string;
 };
 
 type QuestionStats = {
+  id: string;
   label: string;
-  count: number; // จำนวนผู้ตอบทั้งหมด
-  scores: { [score: number]: number }; // จำนวนคนตอบแต่ละคะแนน (1-5)
+  count: number;
+  scores: { [score: number]: number };
   average: number;
 };
 
@@ -30,54 +36,105 @@ type SectionStats = {
   questions: QuestionStats[];
 };
 
-// Section mapping imported from config/sections.ts
-
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { role } = useAuthRole();
+  const { language, t } = useLanguage();
+  const sections = getSections(language);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SectionStats[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
-  const [activeTab, setActiveTab] = useState<string>(SECTIONS[0]?.id || "1"); // Default to section 1
+  const [activeTab, setActiveTab] = useState<string>(sections[0]?.id || "1");
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
 
   useEffect(() => {
-    checkAccessAndFetch();
-  }, []);
+    setActiveTab((current) => current || sections[0]?.id || "1");
+  }, [sections]);
 
-  const checkAccessAndFetch = async () => {
+  const processStats = useCallback(
+    (evaluations: EvaluationRow[]) => {
+      setTotalResponses(evaluations.length);
+
+      const sectionMap = new Map<string, Map<string, number[]>>();
+
+      evaluations.forEach((row) => {
+        const rubric = row.rubric;
+        if (!rubric) return;
+
+        Object.entries(rubric).forEach(([sectionId, questions]) => {
+          if (!questions) return;
+
+          if (!sectionMap.has(sectionId)) {
+            sectionMap.set(sectionId, new Map());
+          }
+
+          const questionMap = sectionMap.get(sectionId)!;
+
+          Object.entries(questions).forEach(([storageKey, score]) => {
+            if (score === null || score === undefined) return;
+
+            if (!questionMap.has(storageKey)) {
+              questionMap.set(storageKey, []);
+            }
+            questionMap.get(storageKey)!.push(score);
+          });
+        });
+      });
+
+      const result: SectionStats[] = sections.map((sectionConf) => {
+        const questionMap = sectionMap.get(sectionConf.id) || new Map();
+        const questions: QuestionStats[] = sectionConf.questions.map((question) => {
+          const scores = questionMap.get(question.storageKey) || [];
+          const count = scores.length;
+          const totalScore = scores.reduce((sum, score) => sum + score, 0);
+          const average = count > 0 ? totalScore / count : 0;
+          const scoreCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+          scores.forEach((score) => {
+            if (score >= 1 && score <= 5) {
+              scoreCounts[score as 1 | 2 | 3 | 4 | 5] += 1;
+            }
+          });
+
+          return {
+            id: question.id,
+            label: question.label,
+            count,
+            scores: scoreCounts,
+            average,
+          };
+        });
+
+        return {
+          id: sectionConf.id,
+          title: sectionConf.title,
+          questions,
+        };
+      });
+
+      setStats(result);
+    },
+    [sections],
+  );
+
+  const fetchEvaluations = useCallback(async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         navigate("/", { replace: true });
         return;
       }
 
-      const { data: userInfo, error: userError } = await supabase
-        .from("user_information")
-        .select("role")
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
+      let query = supabase.from("evaluations").select("id, rubric, created_at");
 
-      if (userError || !userInfo || userInfo.role !== "admin") {
-        alert("คุณไม่มีสิทธิเข้าถึงหน้า Dashboard เนื่องจากหน้านี้เฉพาะแอดมินเท่านั้น");
-        navigate("/form-submit", { replace: true });
-        return;
+      if (!roleAtLeast(role ?? "user", "editor")) {
+        query = query.eq("user_id", user.id);
       }
 
-      await fetchEvaluations();
-    } catch (error) {
-      console.error("Access check failed", error);
-      navigate("/form-submit", { replace: true });
-    }
-  };
-
-  const fetchEvaluations = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("evaluations")
-        .select("id, rubric, created_at");
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -89,138 +146,79 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, processStats, role]);
 
-  const processStats = (evaluations: EvaluationRow[]) => {
-    setTotalResponses(evaluations.length);
+  useEffect(() => {
+    if (!role) {
+      return;
+    }
 
-    const sectionMap = new Map<string, Map<string, number[]>>();
+    const run = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
 
-    evaluations.forEach((row) => {
-      const rubric = row.rubric;
-      if (!rubric) return;
-
-      Object.entries(rubric).forEach(([sectionId, questions]) => {
-        if (!questions) return;
-
-        if (!sectionMap.has(sectionId)) {
-          sectionMap.set(sectionId, new Map());
+        if (!user) {
+          navigate("/", { replace: true });
+          return;
         }
 
-        const questionMap = sectionMap.get(sectionId)!;
+        void accountingService
+          .logActivity({
+            user_id: user.id,
+            action: "dashboard.viewed",
+            resource: "dashboard",
+          })
+          .catch((logError) => {
+            console.error("Activity log failed:", logError);
+          });
 
-        Object.entries(questions).forEach(([label, score]) => {
-          if (score === null || score === undefined) return;
+        await fetchEvaluations();
+      } catch (error) {
+        console.error("Access check failed", error);
+        navigate("/form-submit", { replace: true });
+      }
+    };
 
-          if (!questionMap.has(label)) {
-            questionMap.set(label, []);
-          }
-          questionMap.get(label)!.push(score);
-        });
-      });
-    });
-
-    const result: SectionStats[] = [];
-
-    SECTIONS.forEach((sectionConf) => {
-      const sectionId = sectionConf.id;
-      const questionMap = sectionMap.get(sectionId) || new Map();
-      const questions: QuestionStats[] = [];
-
-      sectionConf.questions.forEach((qConf) => {
-        const label = qConf.label;
-        const scores: number[] = questionMap.get(label) || [];
-
-        const count = scores.length;
-        const totalScore = scores.reduce((sum: number, s: number) => sum + s, 0);
-        const average = count > 0 ? totalScore / count : 0;
-
-        const scoreCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-        scores.forEach((s: number) => {
-          if (s >= 1 && s <= 5) scoreCounts[s as 1 | 2 | 3 | 4 | 5]++;
-        });
-
-        questions.push({
-          label,
-          count,
-          scores: scoreCounts,
-          average,
-        });
-      });
-
-      result.push({
-        id: sectionId,
-        title: sectionConf.title,
-        questions,
-      });
-    });
-
-    setStats(result);
-  };
+    void run();
+  }, [fetchEvaluations, navigate, role]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">กำลังประมวลผลข้อมูล...</div>
+      <div className="min-h-screen bg-gray-50">
+        <MainNavbar />
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-lg text-gray-600">{t("common.loading")}</div>
+        </div>
       </div>
     );
   }
 
-  // Find active section data
-  const activeSectionData = stats.find((s) => s.id === activeTab);
+  const activeSectionData = stats.find((section) => section.id === activeTab);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Back Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition shadow-sm"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="w-4 h-4"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span className="text-sm font-medium">กลับ</span>
-          </button>
-        </div>
-
+    <div className="min-h-screen bg-gray-50">
+      <MainNavbar />
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Dashboard สรุปผลการประเมิน
-          </h1>
-          <p className="text-gray-500">
-            จำนวนผู้ตอบแบบสอบถามทั้งหมด: {totalResponses} คน
-          </p>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900">{t("dashboard.title")}</h1>
+          <p className="text-gray-500">{t("dashboard.totalResponses", { count: totalResponses })}</p>
         </div>
 
-        {/* Controls Section */}
-        <div className="mb-8 flex flex-col xl:flex-row justify-between items-start gap-6">
-          {/* Section Selection (Buttons) */}
-          <div className="flex-1 w-full">
-            <span className="text-sm font-medium text-gray-500 mb-2 block">
-              เลือกหัวข้อประเมิน:
+        <div className="mb-8 flex flex-col items-start justify-between gap-6 xl:flex-row">
+          <div className="w-full flex-1">
+            <span className="mb-2 block text-sm font-medium text-gray-500">
+              {t("dashboard.selectSection")}
             </span>
             <div className="flex flex-wrap gap-2">
-              {SECTIONS.map((section) => (
+              {sections.map((section) => (
                 <button
                   key={section.id}
                   onClick={() => setActiveTab(section.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                  className={`ui-hover-button whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium ${
                     activeTab === section.id
                       ? "bg-[#04418b] text-white shadow-md"
-                      : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                      : "border border-gray-200 bg-white text-gray-600"
                   }`}
                 >
                   {section.title}
@@ -229,117 +227,71 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Chart View Switcher */}
-          <div className="w-full xl:w-auto flex-shrink-0">
-            <span className="text-sm font-medium text-gray-500 mb-2 block">
-              รูปแบบการแสดงผล:
+          <div className="flex-shrink-0">
+            <span className="mb-2 block text-sm font-medium text-gray-500">
+              {t("dashboard.chartMode")}
             </span>
-            <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm w-full sm:w-auto">
+            <div className="flex w-full rounded-lg border border-gray-200 bg-white p-1 shadow-sm sm:w-auto">
               <button
                 onClick={() => setChartType("bar")}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  chartType === "bar"
-                    ? "bg-blue-50 text-[#04418b]"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium sm:flex-none ${
+                  chartType === "bar" ? "bg-blue-50 text-[#04418b]" : "text-gray-500"
                 }`}
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-                Bar Chart
+                <BarChartIcon />
+                {t("dashboard.barChart")}
               </button>
               <button
                 onClick={() => setChartType("donut")}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  chartType === "donut"
-                    ? "bg-blue-50 text-[#04418b]"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium sm:flex-none ${
+                  chartType === "donut" ? "bg-blue-50 text-[#04418b]" : "text-gray-500"
                 }`}
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
-                  />
-                </svg>
-                Donut Chart
+                <DonutChartIcon />
+                {t("dashboard.donutChart")}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Content */}
         {activeSectionData ? (
-          <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
-            <div className="bg-[#04418b] px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-white">
-                {activeSectionData.title}
-              </h2>
-              <span className="text-white/80 text-sm">
-                หัวข้อที่ {activeSectionData.id}
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow">
+            <div className="flex items-center justify-between bg-[#04418b] px-6 py-4">
+              <h2 className="text-xl font-semibold text-white">{activeSectionData.title}</h2>
+              <span className="text-sm text-white/80">
+                {t("dashboard.sectionLabel", { id: activeSectionData.id })}
               </span>
             </div>
 
-            <div className="p-6 space-y-10">
-              {activeSectionData.questions.map((q, idx) => (
-                <div
-                  key={idx}
-                  className="border-b border-gray-100 last:border-0 pb-8 last:pb-0"
-                >
-                  <div className="flex flex-col md:flex-row gap-8">
-                    {/* Left: Chart */}
+            <div className="space-y-10 p-6">
+              {activeSectionData.questions.map((question, idx) => (
+                <div key={question.id} className="border-b border-slate-300 pb-8 last:border-0 last:pb-0">
+                  <div className="flex flex-col gap-8 md:flex-row">
                     <div className="flex-1 space-y-4">
                       <h3 className="text-lg font-medium text-gray-800">
-                        {idx + 1}. {q.label}
+                        {idx + 1}. {question.label}
                       </h3>
 
                       {chartType === "bar" ? (
                         <div className="space-y-3 pt-2">
                           {[5, 4, 3, 2, 1].map((score) => {
-                            const count = q.scores[score] || 0;
-                            const percentage =
-                              q.count > 0 ? (count / q.count) * 100 : 0;
+                            const count = question.scores[score] || 0;
+                            const percentage = question.count > 0 ? (count / question.count) * 100 : 0;
+
                             return (
-                              <div
-                                key={score}
-                                className="flex items-center gap-3 text-sm"
-                              >
+                              <div key={score} className="flex items-center gap-3 text-sm">
                                 <span className="w-12 text-right font-medium text-gray-500">
-                                  {score} คะแนน
+                                  {score}
                                 </span>
-                                <div className="flex-1 h-6 bg-gray-100 rounded-md overflow-hidden relative group">
+                                <div className="group relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
                                   <div
-                                    className="h-full rounded-md transition-all duration-500 relative flex items-center"
+                                    className="relative flex h-full items-center rounded-md transition-all duration-500"
                                     style={{
                                       width: `${percentage}%`,
                                       backgroundColor: getScoreColor(score),
                                       opacity: percentage > 0 ? 1 : 0.3,
                                     }}
-                                  ></div>
-                                  {/* Percentage Label */}
+                                  />
                                   {percentage > 0 && (
                                     <div className="absolute inset-0 flex items-center px-2">
                                       <span className="text-[10px] font-bold text-white drop-shadow-sm">
@@ -347,47 +299,41 @@ export default function Dashboard() {
                                       </span>
                                     </div>
                                   )}
-                                  {/* Tooltip on hover */}
-                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                    <span className="text-[10px] font-bold text-gray-700 bg-white/90 px-2 py-0.5 rounded shadow-sm border border-gray-200">
-                                      {count} คน
+                                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                                    <span className="rounded border border-gray-200 bg-white/90 px-2 py-0.5 text-[10px] font-bold text-gray-700 shadow-sm">
+                                      {count}
                                     </span>
                                   </div>
                                 </div>
-                                <span className="w-8 text-right text-gray-600 font-medium">
-                                  {count}
-                                </span>
+                                <span className="w-8 text-right font-medium text-gray-600">{count}</span>
                               </div>
                             );
                           })}
                         </div>
                       ) : (
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-8 py-4">
-                          {/* Donut Chart SVG SVG */}
-                          <div className="relative w-48 h-48">
-                            <svg
-                              viewBox="0 0 100 100"
-                              className="w-full h-full transform -rotate-90"
-                            >
+                        <div className="flex flex-col items-center justify-center gap-8 py-4 sm:flex-row">
+                          <div className="relative h-48 w-48">
+                            <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90 transform">
                               {(() => {
-                                let cumulativePercentage = 0;
-                                return [5, 4, 3, 2, 1].map((score) => {
-                                  const count = q.scores[score] || 0;
-                                  const percentage =
-                                    q.count > 0 ? (count / q.count) * 100 : 0;
-                                  if (percentage === 0) return null;
+                                const radius = 40;
+                                const circumference = 2 * Math.PI * radius;
+                                let cumulativeLength = 0;
 
-                                  const strokeDasharray = `${percentage} ${100 - percentage}`;
-                                  const strokeDashoffset =
-                                    -cumulativePercentage;
-                                  cumulativePercentage += percentage;
+                                return [5, 4, 3, 2, 1].map((score) => {
+                                  const count = question.scores[score] || 0;
+                                  if (!question.count || count === 0) return null;
+
+                                  const segmentLength = (count / question.count) * circumference;
+                                  const strokeDasharray = `${segmentLength} ${circumference - segmentLength}`;
+                                  const strokeDashoffset = -cumulativeLength;
+                                  cumulativeLength += segmentLength;
 
                                   return (
                                     <circle
                                       key={score}
                                       cx="50"
                                       cy="50"
-                                      r="40"
+                                      r={radius}
                                       fill="transparent"
                                       stroke={getScoreColor(score)}
                                       strokeWidth="20"
@@ -398,46 +344,31 @@ export default function Dashboard() {
                                   );
                                 });
                               })()}
-                              {/* Inner Circle to make it a donut */}
                               <circle cx="50" cy="50" r="30" fill="white" />
                             </svg>
-                            {/* Center Text */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                               <span className="text-3xl font-bold text-gray-800">
-                                {q.average.toFixed(1)}
+                                {question.average.toFixed(1)}
                               </span>
-                              <span className="text-[10px] text-gray-400 capitalize">
-                                Average
-                              </span>
+                              <span className="text-[10px] text-gray-400">{t("dashboard.average")}</span>
                             </div>
                           </div>
 
-                          {/* Legend for Donut */}
-                          <div className="grid grid-cols-2 sm:flex sm:flex-col gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col">
                             {[5, 4, 3, 2, 1].map((score) => {
-                              const count = q.scores[score] || 0;
-                              const percentage =
-                                q.count > 0 ? (count / q.count) * 100 : 0;
+                              const count = question.scores[score] || 0;
+                              const percentage = question.count > 0 ? (count / question.count) * 100 : 0;
                               return (
-                                <div
-                                  key={score}
-                                  className="flex items-center gap-2 text-xs"
-                                >
+                                <div key={score} className="flex items-center gap-2 text-xs">
                                   <div
-                                    className="w-3 h-3 rounded-full flex-shrink-0"
-                                    style={{
-                                      backgroundColor: getScoreColor(score),
-                                    }}
+                                    className="h-3 w-3 flex-shrink-0 rounded-full"
+                                    style={{ backgroundColor: getScoreColor(score) }}
                                   />
-                                  <span className="text-gray-600 min-w-[50px]">
-                                    {score} คะแนน:
+                                  <span className="min-w-[50px] text-gray-600">
+                                    {score}:
                                   </span>
-                                  <span className="font-bold text-gray-800">
-                                    {count}
-                                  </span>
-                                  <span className="text-gray-400">
-                                    ({percentage.toFixed(0)}%)
-                                  </span>
+                                  <span className="font-bold text-gray-800">{count}</span>
+                                  <span className="text-gray-400">({percentage.toFixed(0)}%)</span>
                                 </div>
                               );
                             })}
@@ -446,25 +377,20 @@ export default function Dashboard() {
                       )}
                     </div>
 
-                    {/* Right: Score Summary */}
-                    <div className="md:w-64 flex-shrink-0 flex flex-col items-center justify-center bg-gray-50 rounded-xl p-6 border border-gray-100">
-                      <span className="text-gray-500 text-sm font-medium text-center mb-1">
-                        คะแนนเฉลี่ย
-                      </span>
-                      <div className="text-5xl font-bold text-[#04418b] my-2">
-                        {q.average.toFixed(2)}
-                      </div>
-                      <span className="text-gray-400 text-xs">
-                        จากเต็ม 5 คะแนน
-                      </span>
-                      <div className="mt-4 w-full h-px bg-gray-200"></div>
-                      <div className="mt-4 flex flex-col items-center">
-                        <span className="text-2xl font-bold text-gray-700">
-                          {q.count}
+                    <div className="md:w-64 flex-shrink-0 rounded-xl border border-slate-300 bg-white p-6">
+                      <div className="flex h-full flex-col items-center justify-center">
+                        <span className="mb-1 text-center text-sm font-medium text-gray-500">
+                          {t("dashboard.scoreAverage")}
                         </span>
-                        <span className="text-gray-400 text-xs">
-                          ผู้ตอบประเมิน
-                        </span>
+                        <div className="my-2 text-5xl font-bold text-[#04418b]">
+                          {question.average.toFixed(2)}
+                        </div>
+                        <span className="text-xs text-gray-400">{t("dashboard.outOfFive")}</span>
+                        <div className="mt-4 h-px w-full bg-slate-300" />
+                        <div className="mt-4 flex flex-col items-center">
+                          <span className="text-2xl font-bold text-gray-700">{question.count}</span>
+                          <span className="text-xs text-gray-400">{t("dashboard.respondents")}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -473,27 +399,9 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="text-center py-16 bg-white rounded-xl shadow border border-gray-200">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
-              ไม่มีข้อมูล
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              ยังไม่มีข้อมูลการประเมินในหัวข้อนี้
-            </p>
+          <div className="rounded-xl border border-gray-200 bg-white py-16 text-center shadow">
+            <h3 className="mt-2 text-sm font-medium text-gray-900">{t("dashboard.noData")}</h3>
+            <p className="mt-1 text-sm text-gray-500">{t("dashboard.noDataDesc")}</p>
           </div>
         )}
       </div>
@@ -501,20 +409,56 @@ export default function Dashboard() {
   );
 }
 
-// Helper function for colors (like Google Forms)
 function getScoreColor(score: number): string {
   switch (score) {
     case 5:
-      return "#4285F4"; // Blue
+      return "#4285F4";
     case 4:
-      return "#34A853"; // Green
+      return "#34A853";
     case 3:
-      return "#FBBC05"; // Yellow
+      return "#FBBC05";
     case 2:
-      return "#FA7B17"; // Orange
+      return "#FA7B17";
     case 1:
-      return "#EA4335"; // Red
+      return "#EA4335";
     default:
       return "#9AA0A6";
   }
+}
+
+function BarChartIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.25h14" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 16.25v-4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 16.25V6.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.75 16.25V9.5" />
+    </svg>
+  );
+}
+
+function DonutChartIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
+      <circle cx="10" cy="10" r="5.75" strokeLinecap="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 4.25a5.75 5.75 0 0 1 5.75 5.75H10V4.25Z" />
+      <circle cx="10" cy="10" r="2.25" />
+    </svg>
+  );
 }

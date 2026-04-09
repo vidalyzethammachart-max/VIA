@@ -1,81 +1,119 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { supabase } from "./lib/supabaseClient";
 
 import Login from "./page/Login";
 import FormSubmit from "./page/FormSubmit";
 import Register from "./page/Register";
 import Profile from "./page/Profile";
 import Dashboard from "./page/Dashboard";
+import AdminDashboard from "./page/AdminDashboard";
+import RoleRequestsPage from "./page/RoleRequestsPage";
 import ForgotPassword from "./page/ForgotPassword";
 import ResetPassword from "./page/ResetPassword";
+import MyFormsDashboard from "./page/MyFormsDashboard";
+import PreviewPage from "./page/PreviewPage";
 import SessionMonitor from "./components/SessionMonitor";
 import Footer from "./components/Footer";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuthRole } from "./hooks/useAuthRole";
+import { roleAtLeast, type AppRole } from "./lib/roles";
+import { useLanguage } from "./i18n/LanguageProvider";
+
+function getDefaultRouteForRole(role: AppRole | null): string {
+  if (!role) return "/";
+  if (roleAtLeast(role, "admin")) return "/admin";
+  if (roleAtLeast(role, "editor")) return "/form-submit";
+  return "/dashboard";
+}
 
 export default function App() {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { loading, session, role } = useAuthRole();
+  const { t } = useLanguage();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-      },
-    );
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <p>{t("common.loading")}</p>;
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* เพิ่ม SessionMonitor เพื่อตรวจสอบ session timeout */}
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
       {session && <SessionMonitor />}
-      
+
       <div className="flex-grow">
         <Routes>
-          {/* public */}
           <Route
             path="/"
-            element={!session ? <Login /> : <Navigate to="/form-submit" />}
+            element={
+              !session ? (
+                <Login />
+              ) : (
+                <Navigate to={getDefaultRouteForRole(role)} replace />
+              )
+            }
           />
-          <Route
-            path="/register"
-            element={<Register />}
-          />
-          <Route
-            path="/forgot-password"
-            element={<ForgotPassword />}
-          />
-          <Route
-            path="/reset-password"
-            element={<ResetPassword />}
-          />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* protected */}
           <Route
             path="/form-submit"
-            element={session ? <FormSubmit /> : <Navigate to="/" />}
+            element={
+              <ProtectedRoute requiredRole="editor">
+                <FormSubmit />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/profile"
-            element={session ? <Profile /> : <Navigate to="/" />}
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/dashboard"
-            element={session ? <Dashboard /> : <Navigate to="/" />}
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-forms"
+            element={
+              <ProtectedRoute>
+                <MyFormsDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/preview/:docId"
+            element={
+              <ProtectedRoute>
+                <PreviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard"
+            element={<Navigate to="/admin" replace />}
+          />
+          <Route
+            path="/role-requests"
+            element={
+              <ProtectedRoute>
+                <RoleRequestsPage />
+              </ProtectedRoute>
+            }
           />
         </Routes>
       </div>
-      
+
       <Footer />
     </div>
   );

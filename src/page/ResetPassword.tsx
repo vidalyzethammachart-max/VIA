@@ -1,149 +1,260 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import Logo from "../assets/logo_no_bg.png";
-import { motion } from "framer-motion";
+import { accountingService } from "../services/accountingService";
+import AuthAlert from "../components/AuthAlert";
+import AuthModal from "../components/AuthModal";
+import AuthPageControls from "../components/AuthPageControls";
+import { useLanguage } from "../i18n/LanguageProvider";
+import {
+  getPasswordUpdateErrorMessage,
+  MIN_PASSWORD_LENGTH,
+  RECOVERY_SESSION_WAIT_MS,
+  validatePasswordReset,
+} from "../utils/passwordReset";
+
+type RecoveryState = "checking" | "ready" | "expired";
 
 export default function ResetPassword() {
+  const { t } = useLanguage();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [recoveryState, setRecoveryState] = useState<RecoveryState>("checking");
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
+  const timeoutRef = useRef<number | null>(null);
+
+  const isCheckingRecovery = recoveryState === "checking";
+  const hasRecoverySession = recoveryState === "ready";
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    const bootstrapRecoverySession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mountedRef.current) return;
+
+      if (session) {
+        setRecoveryState("ready");
+        setPageError("");
+        return;
+      }
+
+      timeoutRef.current = window.setTimeout(async () => {
+        const {
+          data: { session: delayedSession },
+        } = await supabase.auth.getSession();
+
+        if (!mountedRef.current) return;
+
+        if (delayedSession) {
+          setRecoveryState("ready");
+          setPageError("");
+          return;
+        }
+
+        setRecoveryState("expired");
+        setPageError(t("auth.resetLinkExpired"));
+      }, RECOVERY_SESSION_WAIT_MS);
+    };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        if (timeoutRef.current !== null) {
+          window.clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setRecoveryState(session ? "ready" : "expired");
+        setPageError("");
+      }
+    });
+
+    void bootstrapRecoverySession();
+
+    return () => {
+      mountedRef.current = false;
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+      authListener.subscription.unsubscribe();
+    };
+  }, [t]);
+
+  const logResetFailed = async (reason: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    void accountingService
+      .logActivity({
+        user_id: user.id,
+        action: "RESET_PASSWORD_FAILED",
+        resource: "auth",
+        metadata: { reason },
+      })
+      .catch((logError) => {
+        console.error("Activity log failed:", logError);
+      });
+  };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (password !== confirmPassword) {
-      setError("รหัสผ่านไม่ตรงกัน");
-      return;
-    }
+    if (loading || !hasRecoverySession) return;
 
-    if (password.length < 6) {
-      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+    setMessage("");
+    setModalError("");
+
+    const validationMessage = validatePasswordReset(password, confirmPassword);
+    if (validationMessage) {
+      setModalError(validationMessage);
+      const reason = validationMessage.includes("match") ? "password_mismatch" : "weak_password";
+      await logResetFailed(reason);
       return;
     }
 
     setLoading(true);
-    setMessage("");
-    setError("");
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
       });
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setMessage("เปลี่ยนรหัสผ่านสำเร็จ!");
-        setTimeout(async () => {
-          await supabase.auth.signOut();
-          navigate("/");
-        }, 3000);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (updateError) {
+        const safeMessage = getPasswordUpdateErrorMessage(updateError.message);
+        setModalError(safeMessage);
+
+        if (user) {
+          void accountingService
+            .logActivity({
+              user_id: user.id,
+              action: "RESET_PASSWORD_FAILED",
+              resource: "auth",
+              metadata: { reason: updateError.message },
+            })
+            .catch((logError) => {
+              console.error("Activity log failed:", logError);
+            });
+        }
+        return;
       }
-    } catch (err: any) {
-      setError("เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน");
+
+      if (user) {
+        void accountingService
+          .logActivity({
+            user_id: user.id,
+            action: "RESET_PASSWORD_SUCCESS",
+            resource: "auth",
+          })
+          .catch((logError) => {
+            console.error("Activity log failed:", logError);
+          });
+      }
+
+      setMessage(t("auth.resetSuccess"));
+
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        navigate("/", { replace: true });
+      }, 1600);
+    } catch {
+      setModalError(getPasswordUpdateErrorMessage());
+      await logResetFailed("unknown_error");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    // กำหนดว่าผู้ใช้อยู่ใน session สำหรับกู้คืนรหัสผ่านหรือไม่
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        // บางครั้ง session ยังไม่ได้แนบมาทันที 
-        // สามารถแสดงข้อความเตือนให้ ผู้ใช้ตรวจสอบลิงก์
-      }
-    };
-    
-    checkSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        console.log("Password recovery event triggered.");
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
   return (
-    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#f7f9fb]">
-      <div className="relative z-10 flex items-center justify-center w-full px-4 py-12 max-w-md rounded-2xl bg-[#ffffff] border-4 border-[#eaeef2] shadow-lg shadow-gray-200/50">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className="relative z-10 w-full max-w-md backdrop-blur-lg p-8 rounded-2xl shadow-4xl"
-        >
-          <div className="flex justify-center p-2 mb-4">
-            <img src={Logo} alt="Logo" className="w-100 h-auto" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f9fb] dark:bg-slate-950">
+      <AuthPageControls />
+      {modalError && <AuthModal message={modalError} onClose={() => setModalError("")} />}
+
+      <div className="relative z-10 flex w-full max-w-md items-center justify-center rounded-2xl border-4 border-[#eaeef2] bg-white px-4 py-12 dark:border-slate-800 dark:bg-slate-900">
+        <div className="relative z-10 w-full max-w-md rounded-2xl p-8 backdrop-blur-lg">
+          <div className="mb-4 flex justify-center p-2">
+            <img src={Logo} alt="Logo" className="h-auto w-100" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-center text-black mb-2">
-              ตั้งรหัสผ่านใหม่
+            <h2 className="mb-2 text-center text-2xl font-bold text-black dark:text-white">
+              {t("auth.resetPasswordTitle")}
             </h2>
-            <p className="text-sm text-center text-gray-500 mb-6">
-              ระบุรหัสผ่านใหม่ที่คุณต้องการใช้
+            <p className="mb-6 text-center text-sm text-gray-500 dark:text-slate-400">
+              {t("auth.resetPasswordSubtitle")}
             </p>
           </div>
 
-          {message && (
-            <div className="mb-4 text-sm text-green-700 bg-green-100 p-3 rounded-lg border border-green-200 text-center">
-              {message}
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-4 text-sm text-red-700 bg-red-100 p-3 rounded-lg border border-red-200 text-center">
-              {error}
-            </div>
-          )}
+          {message && <AuthAlert variant="success" message={message} />}
+          {pageError && <AuthAlert variant="error" message={pageError} />}
+          {isCheckingRecovery && <AuthAlert variant="info" message={t("auth.resetLinkChecking")} />}
 
           <form onSubmit={handleUpdate} className="space-y-5">
             <div>
-              <label className="block text-gray-600 mb-1 font-medium">
-                รหัสผ่านใหม่
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.newPassword")}
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-[#ffffff] text-black border border-gray-500 rounded-lg focus:ring-1 focus:ring-[#04418b] focus:outline-none"
-                placeholder="ระบุรหัสผ่านใหม่"
+                disabled={loading || !hasRecoverySession}
+                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                placeholder={t("auth.enterNewPassword")}
+                minLength={MIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
                 required
               />
             </div>
-            
+
             <div>
-              <label className="block text-gray-600 mb-1 font-medium">
-                ยืนยันรหัสผ่านใหม่
+              <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
+                {t("auth.confirmPassword")}
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-[#ffffff] text-black border border-gray-500 rounded-lg focus:ring-1 focus:ring-[#04418b] focus:outline-none"
-                placeholder="ระบุรหัสผ่านใหม่อีกครั้งยืนยัน"
+                disabled={loading || !hasRecoverySession}
+                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                placeholder={t("auth.confirmNewPassword")}
+                minLength={MIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
                 required
               />
             </div>
-            
+
             <button
               type="submit"
-              disabled={loading || !!message}
-              className="w-full bg-[#04418b] hover:bg-[#04416b] text-white py-2 rounded-lg font-semibold transition disabled:opacity-50"
+              disabled={loading || !!message || !hasRecoverySession}
+              className="btn-primary w-full rounded-lg py-2 disabled:opacity-50"
             >
-              {loading ? "กำลังปรับปรุง..." : "เปลี่ยนรหัสผ่าน"}
+              {loading ? t("auth.updating") : t("auth.updatePassword")}
             </button>
+
+            {recoveryState === "expired" && (
+              <button
+                type="button"
+                className="btn-secondary w-full rounded-lg py-2"
+                onClick={() => navigate("/forgot-password")}
+              >
+                {t("auth.requestNewResetLink")}
+              </button>
+            )}
           </form>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
