@@ -238,6 +238,7 @@ export default function Dashboard() {
                   chartType === "bar" ? "bg-blue-50 text-[#04418b]" : "text-gray-500"
                 }`}
               >
+                <BarChartIcon />
                 {t("dashboard.barChart")}
               </button>
               <button
@@ -246,6 +247,7 @@ export default function Dashboard() {
                   chartType === "donut" ? "bg-blue-50 text-[#04418b]" : "text-gray-500"
                 }`}
               >
+                <DonutChartIcon />
                 {t("dashboard.donutChart")}
               </button>
             </div>
@@ -422,4 +424,41 @@ function getScoreColor(score: number): string {
     default:
       return "#9AA0A6";
   }
+}
+
+function BarChartIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.25h14" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 16.25v-4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 16.25V6.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.75 16.25V9.5" />
+    </svg>
+  );
+}
+
+function DonutChartIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
+      <circle cx="10" cy="10" r="5.75" strokeLinecap="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 4.25a5.75 5.75 0 0 1 5.75 5.75H10V4.25Z" />
+      <circle cx="10" cy="10" r="2.25" />
+    </svg>
+  );
 }
