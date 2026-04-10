@@ -81,6 +81,8 @@ export const translations: Record<Locale, Dictionary> = {
     "auth.enterUserId": "กรอก User ID",
     "auth.passwordTooShort": "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร",
     "auth.passwordMismatch": "รหัสผ่านไม่ตรงกัน",
+    "auth.resetPasswordTooShort": "รหัสผ่านต้องมีอย่างน้อย {min} ตัวอักษร",
+    "auth.resetPasswordsDoNotMatch": "รหัสผ่านไม่ตรงกัน",
     "auth.enterConfirmPassword": "กรอกยืนยันรหัสผ่าน",
 
     "form.needEditorTitle": "ต้องการสิทธิ์ editor หรือไม่?",
@@ -362,6 +364,8 @@ export const translations: Record<Locale, Dictionary> = {
     "auth.enterUserId": "Enter your User ID",
     "auth.passwordTooShort": "Password must contain at least 6 characters.",
     "auth.passwordMismatch": "Passwords do not match.",
+    "auth.resetPasswordTooShort": "Password must contain at least {min} characters.",
+    "auth.resetPasswordsDoNotMatch": "Passwords do not match.",
     "auth.enterConfirmPassword": "Enter your confirm password",
 
     "form.needEditorTitle": "Need editor access?",

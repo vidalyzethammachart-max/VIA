@@ -9,9 +9,9 @@ import AuthPageControls from "../components/AuthPageControls";
 import { useLanguage } from "../i18n/LanguageProvider";
 import {
   getPasswordUpdateErrorMessage,
+  hasRecoveryParams,
   MIN_PASSWORD_LENGTH,
   RECOVERY_SESSION_WAIT_MS,
-  validatePasswordReset,
 } from "../utils/passwordReset";
 
 type RecoveryState = "checking" | "ready" | "expired";
@@ -24,6 +24,10 @@ export default function ResetPassword() {
   const [message, setMessage] = useState("");
   const [pageError, setPageError] = useState("");
   const [modalError, setModalError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{
+    password?: string;
+    confirmPassword?: string;
+  }>({});
   const [recoveryState, setRecoveryState] = useState<RecoveryState>("checking");
   const navigate = useNavigate();
   const mountedRef = useRef(true);
@@ -36,6 +40,78 @@ export default function ResetPassword() {
     mountedRef.current = true;
 
     const bootstrapRecoverySession = async () => {
+      const currentUrl = new URL(window.location.href);
+      const searchParams = currentUrl.searchParams;
+      const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""));
+      const isRecoveryType =
+        searchParams.get("type") === "recovery" || hashParams.get("type") === "recovery";
+      const authCode = searchParams.get("code");
+      const tokenHash = searchParams.get("token_hash") ?? hashParams.get("token_hash");
+      const accessToken = hashParams.get("access_token") ?? searchParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token") ?? searchParams.get("refresh_token");
+
+      const clearRecoveryUrl = () => {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete("code");
+        nextUrl.searchParams.delete("token_hash");
+        nextUrl.searchParams.delete("type");
+        nextUrl.searchParams.delete("access_token");
+        nextUrl.searchParams.delete("refresh_token");
+        window.history.replaceState(window.history.state, "", `${nextUrl.pathname}${nextUrl.search}`);
+      };
+
+      try {
+        if (authCode) {
+          const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+
+          if (!mountedRef.current) return;
+          if (!error) {
+            clearRecoveryUrl();
+            setRecoveryState("ready");
+            setPageError("");
+            return;
+          }
+        }
+
+        if (isRecoveryType && tokenHash) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+
+          if (!mountedRef.current) return;
+          if (!error) {
+            clearRecoveryUrl();
+            setRecoveryState("ready");
+            setPageError("");
+            return;
+          }
+        }
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (!mountedRef.current) return;
+          if (!error) {
+            clearRecoveryUrl();
+            setRecoveryState("ready");
+            setPageError("");
+            return;
+          }
+        }
+      } catch {
+        // Fall through to normal session checks below.
+      }
+
+      if (!hasRecoveryParams()) {
+        setRecoveryState("expired");
+        setPageError(t("auth.resetLinkExpired"));
+        return;
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -113,11 +189,33 @@ export default function ResetPassword() {
 
     setMessage("");
     setModalError("");
+    setPageError("");
 
-    const validationMessage = validatePasswordReset(password, confirmPassword);
-    if (validationMessage) {
-      setModalError(validationMessage);
-      const reason = validationMessage.includes("match") ? "password_mismatch" : "weak_password";
+    const nextFieldErrors: {
+      password?: string;
+      confirmPassword?: string;
+    } = {};
+
+    if (!password.trim()) {
+      nextFieldErrors.password = t("form.fillField");
+    } else if (password.length < MIN_PASSWORD_LENGTH) {
+      nextFieldErrors.password = t("auth.resetPasswordTooShort", {
+        min: MIN_PASSWORD_LENGTH,
+      });
+    }
+
+    if (!confirmPassword.trim()) {
+      nextFieldErrors.confirmPassword = t("form.fillField");
+    } else if (password !== confirmPassword) {
+      nextFieldErrors.confirmPassword = t("auth.resetPasswordsDoNotMatch");
+    }
+
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
+      const reason =
+        nextFieldErrors.confirmPassword === t("auth.resetPasswordsDoNotMatch")
+          ? "password_mismatch"
+          : "weak_password";
       await logResetFailed(reason);
       return;
     }
@@ -201,7 +299,7 @@ export default function ResetPassword() {
           {pageError && <AuthAlert variant="error" message={pageError} />}
           {isCheckingRecovery && <AuthAlert variant="info" message={t("auth.resetLinkChecking")} />}
 
-          <form onSubmit={handleUpdate} className="space-y-5">
+          <form noValidate onSubmit={handleUpdate} className="space-y-5">
             <div>
               <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
                 {t("auth.newPassword")}
@@ -209,14 +307,35 @@ export default function ResetPassword() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (modalError) setModalError("");
+                  if (pageError && recoveryState !== "expired") setPageError("");
+                  if (fieldErrors.password || fieldErrors.confirmPassword) {
+                    setFieldErrors((current) => ({
+                      ...current,
+                      password: undefined,
+                      confirmPassword:
+                        current.confirmPassword === t("auth.resetPasswordsDoNotMatch")
+                          ? undefined
+                          : current.confirmPassword,
+                    }));
+                  }
+                }}
                 disabled={loading || !hasRecoverySession}
-                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className={`w-full rounded-lg border bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 dark:bg-slate-950 dark:text-white ${
+                  fieldErrors.password
+                    ? "border-red-400 focus:ring-red-200 dark:border-red-500/60"
+                    : "border-gray-500 focus:ring-[#04418b] dark:border-slate-700"
+                }`}
                 placeholder={t("auth.enterNewPassword")}
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 required
               />
+              {fieldErrors.password && (
+                <p className="mt-2 text-sm text-red-500 dark:text-red-400">{fieldErrors.password}</p>
+              )}
             </div>
 
             <div>
@@ -226,14 +345,33 @@ export default function ResetPassword() {
               <input
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (modalError) setModalError("");
+                  if (pageError && recoveryState !== "expired") setPageError("");
+                  if (fieldErrors.confirmPassword) {
+                    setFieldErrors((current) => ({
+                      ...current,
+                      confirmPassword: undefined,
+                    }));
+                  }
+                }}
                 disabled={loading || !hasRecoverySession}
-                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className={`w-full rounded-lg border bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 dark:bg-slate-950 dark:text-white ${
+                  fieldErrors.confirmPassword
+                    ? "border-red-400 focus:ring-red-200 dark:border-red-500/60"
+                    : "border-gray-500 focus:ring-[#04418b] dark:border-slate-700"
+                }`}
                 placeholder={t("auth.confirmNewPassword")}
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 required
               />
+              {fieldErrors.confirmPassword && (
+                <p className="mt-2 text-sm text-red-500 dark:text-red-400">
+                  {fieldErrors.confirmPassword}
+                </p>
+              )}
             </div>
 
             <button

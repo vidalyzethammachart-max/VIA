@@ -9,7 +9,11 @@ export function hasRecoveryParams(currentUrl = new URL(window.location.href)): b
   return (
     searchParams.get("type") === "recovery" ||
     hashParams.get("type") === "recovery" ||
-    searchParams.has("code")
+    searchParams.has("code") ||
+    searchParams.has("token_hash") ||
+    hashParams.has("token_hash") ||
+    (hashParams.has("access_token") && hashParams.has("refresh_token")) ||
+    (searchParams.has("access_token") && searchParams.has("refresh_token"))
   );
 }
 

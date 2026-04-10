@@ -17,6 +17,7 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string }>({});
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const navigate = useNavigate();
 
@@ -26,13 +27,23 @@ export default function ForgotPassword() {
     e.preventDefault();
     if (loading || isCoolingDown) return;
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const nextFieldErrors: { email?: string } = {};
+
+    if (!normalizedEmail) {
+      nextFieldErrors.email = t("form.fillField");
+    }
+
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
+      return;
+    }
+
     setLoading(true);
     setMessage("");
     setError("");
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
@@ -89,7 +100,7 @@ export default function ForgotPassword() {
           {error && <AuthAlert variant="error" message={error} />}
           {isCoolingDown && !error && <AuthAlert variant="info" message={t("auth.resetCooldown")} />}
 
-          <form onSubmit={handleReset} className="space-y-5">
+          <form noValidate onSubmit={handleReset} className="space-y-5">
             <div>
               <label className="mb-1 block font-medium text-gray-600 dark:text-slate-300">
                 {t("auth.email")}
@@ -97,13 +108,27 @@ export default function ForgotPassword() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (message) setMessage("");
+                  if (error) setError("");
+                  if (fieldErrors.email) {
+                    setFieldErrors((current) => ({ ...current, email: undefined }));
+                  }
+                }}
                 disabled={loading}
-                className="w-full rounded-lg border border-gray-500 bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 focus:ring-[#04418b] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className={`w-full rounded-lg border bg-white px-4 py-2 text-black focus:outline-none focus:ring-1 dark:bg-slate-950 dark:text-white ${
+                  fieldErrors.email
+                    ? "border-red-400 focus:ring-red-200 dark:border-red-500/60"
+                    : "border-gray-500 focus:ring-[#04418b] dark:border-slate-700"
+                }`}
                 placeholder={t("auth.enterEmail")}
                 autoComplete="email"
                 required
               />
+              {fieldErrors.email && (
+                <p className="mt-2 text-sm text-red-500 dark:text-red-400">{fieldErrors.email}</p>
+              )}
             </div>
 
             <button type="submit" disabled={loading || isCoolingDown} className="btn-primary w-full rounded-lg py-2">
