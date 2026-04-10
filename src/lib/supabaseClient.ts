@@ -5,8 +5,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true, // เก็บ session ใน localStorage
-    autoRefreshToken: true, // Refresh token อัตโนมัติ
-    detectSessionInUrl: true, // ตรวจจับ session จาก URL
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: "implicit",
   },
 });
