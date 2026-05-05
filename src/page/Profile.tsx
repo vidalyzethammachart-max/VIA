@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import type { User } from "@supabase/supabase-js";
 
 import profilePic from "../assets/profile.jpg";
 import MainNavbar from "../components/MainNavbar";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { supabase } from "../lib/supabaseClient";
 import { accountingService } from "../services/accountingService";
+import { useAuthRole } from "../hooks/useAuthRole";
 
 type UserInfoRow = {
   user_id: string;
@@ -18,6 +20,19 @@ type UserInfoRow = {
 };
 
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
+const PROFILE_QUERY_TIMEOUT_MS = 8000;
+const PROFILE_SELECT_COLUMNS = "user_id, email, auth_user_id, full_name, employee_number, gender, avatar_url";
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out`));
+      }, timeoutMs);
+    }),
+  ]);
+}
 
 async function resizeAvatarImage(file: File, readFailed: string, prepareFailed: string, resizeFailed: string) {
   const imageUrl = URL.createObjectURL(file);
@@ -65,6 +80,7 @@ async function resizeAvatarImage(file: File, readFailed: string, prepareFailed: 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { loading: authLoading, user: authUser } = useAuthRole();
   const genderOptions = [
     { value: "male", label: t("profile.male") },
     { value: "female", label: t("profile.female") },
@@ -89,62 +105,82 @@ export default function ProfilePage() {
   const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
 
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const mountedRef = useRef(true);
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async (user: User) => {
     setLoading(true);
     setError(null);
 
-    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    try {
+      const { data, error: userInfoErr } = await withTimeout(
+        supabase
+          .from("user_information")
+          .select(PROFILE_SELECT_COLUMNS)
+          .eq("auth_user_id", user.id)
+          .maybeSingle(),
+        PROFILE_QUERY_TIMEOUT_MS,
+        "Loading profile data",
+      );
 
-    if (sessionErr) {
-      setError(sessionErr.message);
-      setLoading(false);
-      return;
+      if (!mountedRef.current) return;
+
+      if (userInfoErr) {
+        setError(userInfoErr.message);
+        return;
+      }
+
+      const currentInfo: UserInfoRow = data
+        ? (data as UserInfoRow)
+        : {
+            user_id: user.email?.split("@")[0] || "User",
+            email: user.email || "",
+            auth_user_id: user.id,
+            full_name: null,
+            employee_number: null,
+            gender: null,
+            avatar_url: null,
+          };
+
+      setUserInfo(currentInfo);
+      setEditUserId(currentInfo.user_id);
+      setEditEmail(currentInfo.email);
+      setEditFullName(currentInfo.full_name || "");
+      setEditEmployeeNumber(currentInfo.employee_number || "");
+      setEditGender(currentInfo.gender || "prefer_not_to_say");
+      setEditAvatarUrl(currentInfo.avatar_url || "");
+    } catch (error) {
+      if (!mountedRef.current) return;
+      console.error("Failed to load profile:", error);
+      setError(error instanceof Error ? error.message : t("profile.saveFailed"));
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
-
-    const user = sessionData.session?.user;
-    if (!user) {
-      navigate("/", { replace: true });
-      return;
-    }
-
-    const { data, error: userInfoErr } = await supabase
-      .from("user_information")
-      .select("user_id, email, auth_user_id, full_name, employee_number, gender, avatar_url")
-      .eq("auth_user_id", user.id)
-      .maybeSingle();
-
-    if (userInfoErr) {
-      setError(userInfoErr.message);
-      setLoading(false);
-      return;
-    }
-
-    const currentInfo: UserInfoRow = data
-      ? (data as UserInfoRow)
-      : {
-          user_id: user.email?.split("@")[0] || "User",
-          email: user.email || "",
-          auth_user_id: user.id,
-          full_name: null,
-          employee_number: null,
-          gender: null,
-          avatar_url: null,
-        };
-
-    setUserInfo(currentInfo);
-    setEditUserId(currentInfo.user_id);
-    setEditEmail(currentInfo.email);
-    setEditFullName(currentInfo.full_name || "");
-    setEditEmployeeNumber(currentInfo.employee_number || "");
-    setEditGender(currentInfo.gender || "prefer_not_to_say");
-    setEditAvatarUrl(currentInfo.avatar_url || "");
-    setLoading(false);
-  };
+  }, [t]);
 
   useEffect(() => {
-    void loadProfile();
-  }, [navigate]);
+    mountedRef.current = true;
+
+    if (authLoading) {
+      setLoading(true);
+      return () => {
+        mountedRef.current = false;
+      };
+    }
+
+    if (!authUser) {
+      navigate("/", { replace: true });
+      return () => {
+        mountedRef.current = false;
+      };
+    }
+
+    void loadProfile(authUser);
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [authLoading, authUser, loadProfile, navigate]);
 
   useEffect(() => {
     if (!selectedAvatarFile) {
@@ -217,51 +253,59 @@ export default function ProfilePage() {
   };
 
   const handleSave = async () => {
-    if (!userInfo) return;
+    if (!userInfo || !authUser) return;
 
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      let nextAvatarUrl = editAvatarUrl.trim() || null;
+      const {
+        data: { user: currentAuthUser },
+        error: currentUserError,
+      } = await supabase.auth.getUser();
 
-      if (selectedAvatarFile) {
-        nextAvatarUrl = await uploadAvatarFile(userInfo.auth_user_id, selectedAvatarFile);
+      if (currentUserError) throw currentUserError;
+      if (!currentAuthUser) {
+        navigate("/", { replace: true });
+        return;
       }
 
-      const { error: updateTableError } = await supabase
-        .from("user_information")
-        .upsert(
-          {
-            auth_user_id: userInfo.auth_user_id,
-            user_id: editUserId,
-            email: editEmail,
-            full_name: editFullName.trim() || null,
-            employee_number: editEmployeeNumber.trim() || null,
-            gender: editGender || null,
-            avatar_url: nextAvatarUrl,
-          },
-          { onConflict: "auth_user_id" },
-        );
+      let nextAvatarUrl = editAvatarUrl.trim() || null;
+      const authUserId = currentAuthUser.id;
+      const nextUserId = editUserId.trim();
+      const nextEmail = editEmail.trim().toLowerCase();
 
-      if (updateTableError) throw updateTableError;
+      if (selectedAvatarFile) {
+        nextAvatarUrl = await uploadAvatarFile(authUserId, selectedAvatarFile);
+      }
 
-      if (editEmail !== userInfo.email) {
+      const { error: saveProfileError } = await supabase.rpc("save_my_user_information", {
+        p_user_id: nextUserId,
+        p_email: nextEmail,
+        p_full_name: editFullName.trim() || null,
+        p_employee_number: editEmployeeNumber.trim() || null,
+        p_gender: editGender || null,
+        p_avatar_url: nextAvatarUrl,
+      });
+
+      if (saveProfileError) throw saveProfileError;
+
+      if (nextEmail !== userInfo.email) {
         const { error: updateEmailError } = await supabase.auth.updateUser({
-          email: editEmail,
+          email: nextEmail,
         });
         if (updateEmailError) throw updateEmailError;
       }
 
       void accountingService
         .logActivity({
-          user_id: userInfo.auth_user_id,
+          user_id: authUserId,
           action: "profile.updated",
           resource: "user_information",
           metadata: {
-            changed_email: editEmail !== userInfo.email,
-            changed_user_id: editUserId !== userInfo.user_id,
+            changed_email: nextEmail !== userInfo.email,
+            changed_user_id: nextUserId !== userInfo.user_id,
             changed_full_name: (editFullName.trim() || null) !== userInfo.full_name,
             changed_employee_number: (editEmployeeNumber.trim() || null) !== userInfo.employee_number,
             changed_gender: (editGender || null) !== userInfo.gender,
@@ -280,7 +324,7 @@ export default function ProfilePage() {
       if (avatarInputRef.current) {
         avatarInputRef.current.value = "";
       }
-      await loadProfile();
+      await loadProfile(currentAuthUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("profile.saveFailed"));
     } finally {
@@ -288,18 +332,21 @@ export default function ProfilePage() {
     }
   };
 
+  const avatarSrc = localAvatarPreview || (isEditing ? editAvatarUrl : userInfo?.avatar_url) || profilePic;
+  const avatarEditorOpen = isEditing && showAvatarEditor;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <MainNavbar />
 
       <div className="px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
-          <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm sm:p-12">
+          <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-12">
             <div className="flex flex-col items-center text-center">
               <div className="relative mb-6">
-                <div className="h-24 w-24 aspect-square overflow-hidden rounded-full border-2 border-[#04418b]/10 bg-white shadow-sm ring-4 ring-[#04418b]/5">
+                <div className="h-24 w-24 aspect-square overflow-hidden rounded-full border-2 border-[#04418b]/10 bg-white shadow-sm ring-4 ring-[#04418b]/5 dark:border-sky-400/20 dark:bg-slate-950 dark:ring-sky-400/10">
                   <img
-                    src={localAvatarPreview || (isEditing ? editAvatarUrl : userInfo?.avatar_url) || profilePic}
+                    src={avatarSrc}
                     alt="Profile"
                     className="block h-full w-full rounded-full object-cover object-center"
                   />
@@ -308,28 +355,20 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (selectedAvatarFile) {
-                        void handleSave();
-                        return;
-                      }
                       setShowAvatarEditor((current) => !current);
                     }}
                     disabled={saving}
-                    className="btn-ghost-primary absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold"
+                    aria-label={avatarEditorOpen ? t("profile.closePhotoEdit") : t("profile.changePhoto")}
+                    title={avatarEditorOpen ? t("profile.closePhotoEdit") : t("profile.changePhoto")}
+                    className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-slate-950 text-white shadow-md outline-none transition hover:bg-[#04418b] focus-visible:ring-4 focus-visible:ring-[#04418b]/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-900 dark:bg-sky-500 dark:text-slate-950 dark:hover:bg-sky-400"
                   >
-                    {saving
-                      ? t("profile.saving")
-                      : selectedAvatarFile
-                        ? t("profile.confirmPhoto")
-                        : showAvatarEditor
-                          ? t("profile.closePhotoEdit")
-                          : t("profile.changePhoto")}
+                    <CameraIcon className="h-4 w-4" />
                   </button>
                 )}
               </div>
 
-              {isEditing && showAvatarEditor && (
-                <div className="mb-6 w-full max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+              {avatarEditorOpen && (
+                <div className="mb-8 w-full max-w-md border-y border-slate-100 bg-slate-50/70 px-4 py-5 text-left dark:border-slate-800 dark:bg-slate-950/60 sm:rounded-2xl sm:border">
                   <input
                     ref={avatarInputRef}
                     type="file"
@@ -338,17 +377,21 @@ export default function ProfilePage() {
                     className="hidden"
                   />
 
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-tight text-slate-400">
-                    {t("profile.avatar")}
-                  </label>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold uppercase text-slate-400 dark:text-slate-500">{t("profile.avatar")}</div>
+                    <div className="mt-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {selectedAvatarFile ? selectedAvatarFile.name : t("profile.avatarHint")}
+                    </div>
+                  </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="mt-4 grid grid-cols-[1fr_auto] gap-3">
                     <button
                       type="button"
                       onClick={() => avatarInputRef.current?.click()}
-                      className="btn-ghost-primary px-4 py-3 text-sm font-bold"
+                      className="btn-ghost-primary inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold"
                     >
-                      {t("profile.chooseImage")}
+                      <CameraIcon className="h-4 w-4" />
+                      <span>{t("profile.chooseImage")}</span>
                     </button>
                     <button
                       type="button"
@@ -359,17 +402,13 @@ export default function ProfilePage() {
                           avatarInputRef.current.value = "";
                         }
                       }}
-                      className="btn-secondary px-4 py-3 text-sm font-medium"
+                      aria-label={t("profile.removeImage")}
+                      title={t("profile.removeImage")}
+                      className="btn-secondary inline-flex h-full min-h-12 w-12 items-center justify-center rounded-xl p-0"
                     >
-                      {t("profile.removeImage")}
+                      <TrashIcon className="h-4 w-4" />
                     </button>
                   </div>
-
-                  {selectedAvatarFile && (
-                    <p className="mt-3 text-sm font-medium text-slate-600">{selectedAvatarFile.name}</p>
-                  )}
-
-                  <p className="mt-2 text-xs text-slate-400">{t("profile.avatarHint")}</p>
                 </div>
               )}
 
@@ -381,13 +420,13 @@ export default function ProfilePage() {
 
             <div className="mx-auto mt-12 w-full max-w-md">
               {error && (
-                <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4 text-center text-sm text-red-600">
+                <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4 text-center text-sm text-red-600 dark:border-red-400/30 dark:bg-red-950/30 dark:text-red-200">
                   {error}
                 </div>
               )}
 
               {success && (
-                <div className="mb-6 rounded-xl border border-[#04418b]/10 bg-[#04418b]/5 p-4 text-center text-sm text-[#04418b]">
+                <div className="mb-6 rounded-xl border border-[#04418b]/10 bg-[#04418b]/5 p-4 text-center text-sm text-[#04418b] dark:border-sky-400/30 dark:bg-sky-950/30 dark:text-sky-200">
                   {success}
                 </div>
               )}
@@ -483,7 +522,7 @@ function InputGroup({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border-2 border-transparent bg-[#F8FAFC] px-4 py-3.5 text-sm font-medium text-slate-700 outline-none placeholder:text-slate-300 focus:border-[#04418b]/10 focus:bg-white focus:ring-4 focus:ring-[#04418b]/5"
+        className="w-full rounded-xl border-2 border-transparent bg-[#F8FAFC] px-4 py-3.5 text-sm font-medium text-slate-700 outline-none placeholder:text-slate-300 focus:border-[#04418b]/10 focus:bg-white focus:ring-4 focus:ring-[#04418b]/5 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:border-sky-400/30 dark:focus:bg-slate-950 dark:focus:ring-sky-400/10"
       />
     </div>
   );
@@ -506,7 +545,7 @@ function SelectGroup({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border-2 border-transparent bg-[#F8FAFC] px-4 py-3.5 text-sm font-medium text-slate-700 outline-none focus:border-[#04418b]/10 focus:bg-white focus:ring-4 focus:ring-[#04418b]/5"
+        className="w-full rounded-xl border-2 border-transparent bg-[#F8FAFC] px-4 py-3.5 text-sm font-medium text-slate-700 outline-none focus:border-[#04418b]/10 focus:bg-white focus:ring-4 focus:ring-[#04418b]/5 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-sky-400/30 dark:focus:bg-slate-950 dark:focus:ring-sky-400/10"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -524,5 +563,46 @@ function DisplayItem({ label, value }: { label: string; value: string }) {
       <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</span>
       <span className="text-sm font-bold text-slate-700">{value}</span>
     </div>
+  );
+}
+
+function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M14.5 4.5 13 3H9L7.5 4.5H5.75A2.75 2.75 0 0 0 3 7.25v9A2.75 2.75 0 0 0 5.75 19h12.5A2.75 2.75 0 0 0 21 16.25v-9a2.75 2.75 0 0 0-2.75-2.75H14.5Z" />
+      <circle cx="12" cy="12" r="3.25" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6 18 20H6L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
   );
 }

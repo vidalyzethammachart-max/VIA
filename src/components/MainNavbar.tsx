@@ -23,13 +23,17 @@ export default function MainNavbar({ title, subtitle }: MainNavbarProps) {
           : "border-slate-200 bg-white"
       }`}
     >
-      <div className="w-full px-4 py-4">
+      <div className="w-full px-4 py-2">
         <div className="flex items-center gap-3">
-          <Link to="/" aria-label="Go to home" className="ui-hover-button inline-flex rounded-md">
-            <img src={Logo} alt="VIA Logo" className="h-10 w-auto rounded-md" />
+          <Link
+            to="/"
+            aria-label="Go to home"
+            className="ui-hover-button inline-flex rounded-md"
+          >
+            <img src={Logo} alt="VIA Logo" className="h-8 w-auto rounded-md" />
           </Link>
 
-          <div className="flex flex-col">
+          <div className="flex flex-col gap-0 leading-none">
             <span
               className={`text-xs font-semibold tracking-wide ${
                 isDark ? "text-white" : "text-primary"
@@ -38,14 +42,14 @@ export default function MainNavbar({ title, subtitle }: MainNavbarProps) {
               {t("navbar.brand")}
             </span>
             <h1
-              className={`text-lg font-semibold md:text-xl ${
+              className={`text-base font-semibold leading-tight ${
                 isDark ? "text-slate-100" : "text-slate-900"
               }`}
             >
               {title ?? t("navbar.title")}
             </h1>
             <p
-              className={`text-xs md:text-sm ${
+              className={`text-xs leading-tight ${
                 isDark ? "text-slate-400" : "text-slate-500"
               }`}
             >
