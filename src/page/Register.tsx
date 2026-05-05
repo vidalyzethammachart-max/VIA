@@ -7,6 +7,16 @@ import { useLanguage } from "../i18n/LanguageProvider";
 
 import Logo from "../assets/logo_no_bg.png";
 
+function getRegisterErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("rate limit") || normalizedMessage.includes("email rate limit")) {
+    return "ระบบส่งอีเมลเกินจำนวนที่กำหนด กรุณารอสักครู่แล้วลองใหม่ หรือตั้งค่า SMTP/rate limit ใน Supabase";
+  }
+
+  return message;
+}
+
 function RegisterWrapper({ children }: { children: ReactNode }) {
   const { t } = useLanguage();
 
@@ -35,6 +45,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{
     userId?: string;
     email?: string;
@@ -46,6 +57,8 @@ export default function Register() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
     setErrorMsg(null);
 
     const nextFieldErrors: {
@@ -71,51 +84,70 @@ export default function Register() {
       return;
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    setLoading(true);
 
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedUserId = userId.trim();
 
-    if (data.user) {
-      setNeedsVerification(!data.session);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const { error: insertError } = await supabase.from("user_information").upsert(
-        {
-          auth_user_id: data.user.id,
-          user_id: userId,
-          email,
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            user_id: normalizedUserId,
+          },
         },
-        { onConflict: "auth_user_id" },
-      );
+      });
 
-      if (insertError) {
-        console.error("Data insertion error:", insertError);
-        setErrorMsg(insertError.message);
+      if (error) {
+        setErrorMsg(getRegisterErrorMessage(error.message));
         return;
       }
 
-      void accountingService
-        .logActivity({
-          user_id: data.user.id,
-          action: "auth.registered",
-          resource: "auth",
-          metadata: {
-            email_verified_immediately: Boolean(data.session),
-          },
-        })
-        .catch((logError) => {
-          console.error("Activity log failed:", logError);
-        });
-    }
+      if (data.user) {
+        setNeedsVerification(!data.session);
+        if (data.session) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
-    await supabase.auth.signOut();
-    setRegistered(true);
+          const { error: insertError } = await supabase.from("user_information").upsert(
+            {
+              auth_user_id: data.user.id,
+              user_id: normalizedUserId,
+              email: normalizedEmail,
+            },
+            { onConflict: "auth_user_id" },
+          );
+
+          if (insertError) {
+            console.error("Data insertion error:", insertError);
+            setErrorMsg(insertError.message);
+            return;
+          }
+        }
+
+        if (data.session) {
+          void accountingService
+            .logActivity({
+              user_id: data.user.id,
+              action: "auth.registered",
+              resource: "auth",
+              metadata: {
+                email_verified_immediately: true,
+              },
+            })
+            .catch((logError) => {
+              console.error("Activity log failed:", logError);
+            });
+        }
+      }
+
+      await supabase.auth.signOut();
+      setEmail(normalizedEmail);
+      setRegistered(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (registered) {
@@ -277,8 +309,8 @@ export default function Register() {
             <p className="text-xs leading-relaxed text-red-600 dark:text-red-300">{errorMsg}</p>
           </div>
         )}
-        <button type="submit" className="btn-primary w-full rounded-lg py-2">
-          {t("auth.register")}
+        <button type="submit" disabled={loading} className="btn-primary w-full rounded-lg py-2 disabled:opacity-50">
+          {loading ? t("auth.sending") : t("auth.register")}
         </button>
       </form>
       <p className="mt-4 text-center text-sm text-gray-600 dark:text-slate-400">

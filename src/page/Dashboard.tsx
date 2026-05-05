@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
 import { accountingService } from "../services/accountingService";
 import MainNavbar from "../components/MainNavbar";
-import { useAuthRole } from "../hooks/useAuthRole";
-import { roleAtLeast } from "../lib/roles";
 import { getSections } from "../config/sections";
+import { useAuthRole } from "../hooks/useAuthRole";
 import { useLanguage } from "../i18n/LanguageProvider";
 
 type RubricValue = number | null;
@@ -36,11 +35,24 @@ type SectionStats = {
   questions: QuestionStats[];
 };
 
+const DASHBOARD_QUERY_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out`));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { role } = useAuthRole();
+  const { loading: authLoading, user: authUser } = useAuthRole();
   const { language, t } = useLanguage();
-  const sections = getSections(language);
+  const sections = useMemo(() => getSections(language), [language]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SectionStats[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
@@ -70,8 +82,9 @@ export default function Dashboard() {
 
           const questionMap = sectionMap.get(sectionId)!;
 
-          Object.entries(questions).forEach(([storageKey, score]) => {
-            if (score === null || score === undefined) return;
+          Object.entries(questions).forEach(([storageKey, rawScore]) => {
+            const score = typeof rawScore === "string" ? Number(rawScore) : rawScore;
+            if (score === null || score === undefined || Number.isNaN(score)) return;
 
             if (!questionMap.has(storageKey)) {
               questionMap.set(storageKey, []);
@@ -85,13 +98,16 @@ export default function Dashboard() {
         const questionMap = sectionMap.get(sectionConf.id) || new Map();
         const questions: QuestionStats[] = sectionConf.questions.map(
           (question) => {
-            const scores = questionMap.get(question.storageKey) || [];
+            const scores = [
+              ...(questionMap.get(question.storageKey) || []),
+              ...(questionMap.get(question.id) || []),
+            ];
             const count = scores.length;
-            const totalScore = scores.reduce((sum: any  , score: any) => sum + score, 0);
+            const totalScore = scores.reduce((sum, score) => sum + score, 0);
             const average = count > 0 ? totalScore / count : 0;
             const scoreCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
 
-            scores.forEach((score: any) => {
+            scores.forEach((score) => {
               if (score >= 1 && score <= 5) {
                 scoreCounts[score as 1 | 2 | 3 | 4 | 5] += 1;
               }
@@ -121,22 +137,16 @@ export default function Dashboard() {
 
   const fetchEvaluations = useCallback(async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      if (!authUser) {
         navigate("/", { replace: true });
         return;
       }
 
-      let query = supabase.from("evaluations").select("id, rubric, created_at");
-
-      if (!roleAtLeast(role ?? "user", "editor")) {
-        query = query.eq("user_id", user.id);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await withTimeout(
+        supabase.from("evaluations").select("id, rubric, created_at"),
+        DASHBOARD_QUERY_TIMEOUT_MS,
+        "Loading dashboard evaluations",
+      );
 
       if (error) throw error;
 
@@ -148,26 +158,24 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [navigate, processStats, role]);
+  }, [authUser, navigate, processStats]);
 
   useEffect(() => {
-    if (!role) {
-      return;
-    }
-
     const run = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const user = sessionData.session?.user;
+        if (authLoading) {
+          setLoading(true);
+          return;
+        }
 
-        if (!user) {
+        if (!authUser) {
           navigate("/", { replace: true });
           return;
         }
 
         void accountingService
           .logActivity({
-            user_id: user.id,
+            user_id: authUser.id,
             action: "dashboard.viewed",
             resource: "dashboard",
           })
@@ -178,12 +186,12 @@ export default function Dashboard() {
         await fetchEvaluations();
       } catch (error) {
         console.error("Access check failed", error);
-        navigate("/form-submit", { replace: true });
+        setLoading(false);
       }
     };
 
     void run();
-  }, [fetchEvaluations, navigate, role]);
+  }, [authLoading, authUser, fetchEvaluations, navigate]);
 
   if (loading) {
     return (
