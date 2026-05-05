@@ -11,7 +11,10 @@ import {
   getPasswordUpdateErrorMessage,
   hasRecoveryParams,
   MIN_PASSWORD_LENGTH,
+  PASSWORD_RESET_RECOVERY_KEY,
+  PASSWORD_UPDATE_TIMEOUT_MS,
   RECOVERY_SESSION_WAIT_MS,
+  validatePasswordReset,
 } from "../utils/passwordReset";
 
 type RecoveryState = "checking" | "ready" | "expired";
@@ -24,6 +27,7 @@ export default function ResetPassword() {
   const [message, setMessage] = useState("");
   const [pageError, setPageError] = useState("");
   const [modalError, setModalError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<{
     password?: string;
     confirmPassword?: string;
@@ -31,22 +35,65 @@ export default function ResetPassword() {
   const [recoveryState, setRecoveryState] = useState<RecoveryState>("checking");
   const navigate = useNavigate();
   const mountedRef = useRef(true);
-  const timeoutRef = useRef<number | null>(null);
+  const recoveryTimeoutRef = useRef<number | null>(null);
+  const redirectTimeoutRef = useRef<number | null>(null);
 
   const isCheckingRecovery = recoveryState === "checking";
   const hasRecoverySession = recoveryState === "ready";
+  const effectivePageError = recoveryState === "expired" ? t("auth.resetLinkExpired") : pageError;
 
   useEffect(() => {
     mountedRef.current = true;
 
+    const clearRecoveryTimeout = () => {
+      if (recoveryTimeoutRef.current !== null) {
+        window.clearTimeout(recoveryTimeoutRef.current);
+        recoveryTimeoutRef.current = null;
+      }
+    };
+
+    const clearRedirectTimeout = () => {
+      if (redirectTimeoutRef.current !== null) {
+        window.clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
+    };
+
+    const persistRecoveryMarker = () => {
+      window.sessionStorage.setItem(PASSWORD_RESET_RECOVERY_KEY, "1");
+    };
+
+    const clearRecoveryMarker = () => {
+      window.sessionStorage.removeItem(PASSWORD_RESET_RECOVERY_KEY);
+    };
+
+    const markRecoveryReady = () => {
+      clearRecoveryTimeout();
+      persistRecoveryMarker();
+      setRecoveryState("ready");
+      setPageError("");
+    };
+
+    const markRecoveryExpired = () => {
+      clearRecoveryTimeout();
+      clearRecoveryMarker();
+      setRecoveryState("expired");
+      setPageError("");
+    };
+
     const bootstrapRecoverySession = async () => {
       const currentUrl = new URL(window.location.href);
+      const recoveryParamsPresent = hasRecoveryParams(currentUrl);
+      const hasRecoveryMarker = window.sessionStorage.getItem(PASSWORD_RESET_RECOVERY_KEY) === "1";
       const searchParams = currentUrl.searchParams;
       const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""));
-      const isRecoveryType =
-        searchParams.get("type") === "recovery" || hashParams.get("type") === "recovery";
       const authCode = searchParams.get("code");
-      const tokenHash = searchParams.get("token_hash") ?? hashParams.get("token_hash");
+      const malformedTokenHashMatch = currentUrl.search.match(/[?&]token_hash=([^&]+)/);
+      const tokenHash =
+        searchParams.get("token_hash") ??
+        hashParams.get("token_hash") ??
+        malformedTokenHashMatch?.[1] ??
+        null;
       const accessToken = hashParams.get("access_token") ?? searchParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token") ?? searchParams.get("refresh_token");
 
@@ -57,6 +104,7 @@ export default function ResetPassword() {
         nextUrl.searchParams.delete("type");
         nextUrl.searchParams.delete("access_token");
         nextUrl.searchParams.delete("refresh_token");
+        nextUrl.hash = "";
         window.history.replaceState(window.history.state, "", `${nextUrl.pathname}${nextUrl.search}`);
       };
 
@@ -67,13 +115,13 @@ export default function ResetPassword() {
           if (!mountedRef.current) return;
           if (!error) {
             clearRecoveryUrl();
-            setRecoveryState("ready");
-            setPageError("");
+            markRecoveryReady();
             return;
           }
+          console.error("exchangeCodeForSession failed:", error.message);
         }
 
-        if (isRecoveryType && tokenHash) {
+        if (tokenHash) {
           const { error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: "recovery",
@@ -82,10 +130,10 @@ export default function ResetPassword() {
           if (!mountedRef.current) return;
           if (!error) {
             clearRecoveryUrl();
-            setRecoveryState("ready");
-            setPageError("");
+            markRecoveryReady();
             return;
           }
+          console.error("verifyOtp recovery failed:", error.message);
         }
 
         if (accessToken && refreshToken) {
@@ -97,18 +145,17 @@ export default function ResetPassword() {
           if (!mountedRef.current) return;
           if (!error) {
             clearRecoveryUrl();
-            setRecoveryState("ready");
-            setPageError("");
+            markRecoveryReady();
             return;
           }
+          console.error("setSession recovery failed:", error.message);
         }
-      } catch {
-        // Fall through to normal session checks below.
+      } catch (error) {
+        console.error("bootstrapRecoverySession failed:", error);
       }
 
-      if (!hasRecoveryParams()) {
-        setRecoveryState("expired");
-        setPageError(t("auth.resetLinkExpired"));
+      if (!recoveryParamsPresent && !hasRecoveryMarker) {
+        markRecoveryExpired();
         return;
       }
 
@@ -118,13 +165,12 @@ export default function ResetPassword() {
 
       if (!mountedRef.current) return;
 
-      if (session) {
-        setRecoveryState("ready");
-        setPageError("");
+      if (session && (recoveryParamsPresent || hasRecoveryMarker)) {
+        markRecoveryReady();
         return;
       }
 
-      timeoutRef.current = window.setTimeout(async () => {
+      recoveryTimeoutRef.current = window.setTimeout(async () => {
         const {
           data: { session: delayedSession },
         } = await supabase.auth.getSession();
@@ -132,24 +178,22 @@ export default function ResetPassword() {
         if (!mountedRef.current) return;
 
         if (delayedSession) {
-          setRecoveryState("ready");
-          setPageError("");
+          markRecoveryReady();
           return;
         }
 
-        setRecoveryState("expired");
-        setPageError(t("auth.resetLinkExpired"));
+        markRecoveryExpired();
       }, RECOVERY_SESSION_WAIT_MS);
     };
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
-        if (timeoutRef.current !== null) {
-          window.clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
+        if (session) {
+          markRecoveryReady();
+          return;
         }
-        setRecoveryState(session ? "ready" : "expired");
-        setPageError("");
+
+        markRecoveryExpired();
       }
     });
 
@@ -157,12 +201,11 @@ export default function ResetPassword() {
 
     return () => {
       mountedRef.current = false;
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-      }
+      clearRecoveryTimeout();
+      clearRedirectTimeout();
       authListener.subscription.unsubscribe();
     };
-  }, [t]);
+  }, []);
 
   const logResetFailed = async (reason: string) => {
     const {
@@ -185,35 +228,44 @@ export default function ResetPassword() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || !hasRecoverySession) return;
+    if (loading) return;
+    if (!hasRecoverySession) {
+      setPageError(t("auth.resetLinkExpired"));
+      return;
+    }
 
     setMessage("");
     setModalError("");
-    setPageError("");
+    setStatusMessage("");
+    if (recoveryState !== "expired") {
+      setPageError("");
+    }
 
+    const validationErrors = validatePasswordReset(password, confirmPassword);
     const nextFieldErrors: {
       password?: string;
       confirmPassword?: string;
-    } = {};
+    } = {
+      password:
+        validationErrors.password === "required"
+          ? t("form.fillField")
+          : validationErrors.password === "too_short"
+            ? t("auth.resetPasswordTooShort", { min: MIN_PASSWORD_LENGTH })
+            : undefined,
+      confirmPassword:
+        validationErrors.confirmPassword === "required"
+          ? t("form.fillField")
+          : validationErrors.confirmPassword === "mismatch"
+            ? t("auth.resetPasswordsDoNotMatch")
+            : undefined,
+    };
 
-    if (!password.trim()) {
-      nextFieldErrors.password = t("form.fillField");
-    } else if (password.length < MIN_PASSWORD_LENGTH) {
-      nextFieldErrors.password = t("auth.resetPasswordTooShort", {
-        min: MIN_PASSWORD_LENGTH,
-      });
-    }
-
-    if (!confirmPassword.trim()) {
-      nextFieldErrors.confirmPassword = t("form.fillField");
-    } else if (password !== confirmPassword) {
-      nextFieldErrors.confirmPassword = t("auth.resetPasswordsDoNotMatch");
-    }
+    const hasFieldErrors = Object.values(nextFieldErrors).some(Boolean);
 
     setFieldErrors(nextFieldErrors);
-    if (Object.keys(nextFieldErrors).length > 0) {
+    if (hasFieldErrors) {
       const reason =
-        nextFieldErrors.confirmPassword === t("auth.resetPasswordsDoNotMatch")
+        validationErrors.confirmPassword === "mismatch"
           ? "password_mismatch"
           : "weak_password";
       await logResetFailed(reason);
@@ -221,11 +273,21 @@ export default function ResetPassword() {
     }
 
     setLoading(true);
+    setStatusMessage(t("auth.updating"));
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
+      const updateResult = await Promise.race([
+        supabase.auth.updateUser({
+          password,
+        }),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => {
+            reject(new Error("timeout"));
+          }, PASSWORD_UPDATE_TIMEOUT_MS);
+        }),
+      ]);
+
+      const { error: updateError } = updateResult;
 
       const {
         data: { user },
@@ -263,15 +325,20 @@ export default function ResetPassword() {
       }
 
       setMessage(t("auth.resetSuccess"));
+      setStatusMessage("");
+      window.sessionStorage.removeItem(PASSWORD_RESET_RECOVERY_KEY);
 
-      setTimeout(async () => {
+      redirectTimeoutRef.current = window.setTimeout(async () => {
         await supabase.auth.signOut();
         navigate("/", { replace: true });
       }, 1600);
-    } catch {
-      setModalError(getPasswordUpdateErrorMessage());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : undefined;
+      console.error("updateUser failed:", error);
+      setModalError(getPasswordUpdateErrorMessage(errorMessage));
       await logResetFailed("unknown_error");
     } finally {
+      setStatusMessage("");
       setLoading(false);
     }
   };
@@ -296,7 +363,10 @@ export default function ResetPassword() {
           </div>
 
           {message && <AuthAlert variant="success" message={message} />}
-          {pageError && <AuthAlert variant="error" message={pageError} />}
+          {effectivePageError && <AuthAlert variant="error" message={effectivePageError} />}
+          {statusMessage && !message && !effectivePageError && (
+            <AuthAlert variant="info" message={statusMessage} />
+          )}
           {isCheckingRecovery && <AuthAlert variant="info" message={t("auth.resetLinkChecking")} />}
 
           <form noValidate onSubmit={handleUpdate} className="space-y-5">
@@ -315,10 +385,7 @@ export default function ResetPassword() {
                     setFieldErrors((current) => ({
                       ...current,
                       password: undefined,
-                      confirmPassword:
-                        current.confirmPassword === t("auth.resetPasswordsDoNotMatch")
-                          ? undefined
-                          : current.confirmPassword,
+                      confirmPassword: current.confirmPassword ? undefined : current.confirmPassword,
                     }));
                   }
                 }}
