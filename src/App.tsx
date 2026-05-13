@@ -11,6 +11,8 @@ import ForgotPassword from "./page/ForgotPassword";
 import ResetPassword from "./page/ResetPassword";
 import MyFormsDashboard from "./page/MyFormsDashboard";
 import PreviewPage from "./page/PreviewPage";
+import VideoUpload from "./page/VideoUpload";
+import ViaVideoEvaluationForm from "./page/ViaVideoEvaluationForm";
 import SessionMonitor from "./components/SessionMonitor";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -80,6 +82,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MyFormsDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/upload-video"
+            element={
+              <ProtectedRoute>
+                <VideoUpload />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/via-video-evaluation"
+            element={
+              <ProtectedRoute>
+                <ViaVideoEvaluationForm />
               </ProtectedRoute>
             }
           />

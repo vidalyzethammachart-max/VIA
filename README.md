@@ -29,6 +29,7 @@ Video Intelligence & Analytics web application for evaluation form submission, r
   - employee number
   - gender
   - avatar upload
+- Video file upload to n8n webhook
 - Admin dashboard
   - user search/filter
   - role update
@@ -45,6 +46,7 @@ Video Intelligence & Analytics web application for evaluation form submission, r
 - `/form-submit`
 - `/my-forms`
 - `/preview/:docId`
+- `/upload-video`
 - `/profile`
 - `/role-requests`
 - `/admin`
@@ -57,6 +59,45 @@ Create a `.env` file:
 VITE_N8N_WEBHOOK_URL=YOUR_N8N_WEBHOOK_URL
 VITE_SUPABASE_URL=YOUR_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+N8N_WEBHOOK_URL=YOUR_N8N_WEBHOOK_URL
+```
+
+`POST /api/upload-video` accepts a `multipart/form-data` request with a `video` file field and optional `subject_name` and `order_number` fields. The API validates the file and forwards the same multipart payload to `N8N_WEBHOOK_URL`, so n8n receives a binary field named `video`.
+
+For 100MB uploads, deploy the upload backend to Cloud Run. Vercel Functions cannot receive large video request bodies.
+
+Local Cloud Run-compatible backend:
+
+```bash
+npm run start:upload-api
+```
+
+Set the frontend upload target when using Cloud Run:
+
+```env
+VITE_UPLOAD_VIDEO_API_URL=https://YOUR_CLOUD_RUN_URL/api/upload-video
+```
+
+Build the Cloud Run container with:
+
+```bash
+docker build -f Dockerfile.cloudrun -t via-upload-api .
+```
+
+The Cloud Run backend also exposes `POST /api/analyze-video` for n8n. It accepts:
+
+```json
+{
+  "fileUrl": "https://example.com/video.mp4",
+  "fileName": "video.mp4"
+}
+```
+
+It downloads the video, extracts sample frames with ffmpeg, sends those frames to Gemini vision, and returns a structured analysis. Set:
+
+```env
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+GEMINI_MODEL=gemini-1.5-flash
 ```
 
 ## Local Development
